@@ -6,6 +6,10 @@
  
 <script>
 
+
+
+
+
 var config = { //create configuration for game
   type: Phaser.Canvas,
     width: 1280,
@@ -17,7 +21,8 @@ var config = { //create configuration for game
   physics: {
     default: 'arcade', //the physics engine the game will use
     arcade: {
-      debug: false
+      debug: true,
+      debugShowBody: true
     }
   },
   scene: {
@@ -66,9 +71,34 @@ function create () { //this function creates sprites at the start of the game
   obstacles.create(900, 800, 'obstacle');
  
   this.physics.add.collider(player, obstacles); //collision detection between player and obstacles
+
+  this.text = this.add.text(10,10,'angle');
+  this.posx = this.add.text(15,15,'positionx');
+  this.posy = this.add.text(30,30, 'positiony');
+    this.curx = this.add.text(45,45, 'curx');
+    this.cury = this.add.text(60,60,'cury');
+
+  this.input.on('pointermove', function(pointer) {
+        var angle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
+        player.setAngle(angle);
+        this.text.text = 'angle: ' + angle;
+        this.posx.text = 'positionx ' + player.x;
+        this.posy.text = 'positiony ' + player.y;
+        this.curx.text = 'pcurx ' + pointer.x;
+        this.cury.text = 'pcury ' + pointer.y;
+    }, this);
+
 }
- 
+
 function update () { //this function runs every frame
+
+    this.text.setPosition(player.x-10, player.y-10);
+    this.posx.setPosition(player.x-30, player.y-30);
+    this.posy.setPosition(player.x-60, player.y-60);
+
+    this.curx.setPosition(player.x-90, player.y-90);
+    this.cury.setPosition(player.x-120, player.y-120);
+
   if (cursors.left.isDown && player.x >= 0) {
       player.setVelocityX(-200); //go left
   }
@@ -81,6 +111,7 @@ function update () { //this function runs every frame
  
   if (cursors.up.isDown && player.y >= 0) {
       player.setVelocityY(-200); //move up
+      
   }
   else if (cursors.down.isDown && player.y <= yLimit) {
       player.setVelocityY(200); //move down
@@ -89,8 +120,12 @@ function update () { //this function runs every frame
       player.setVelocityY(0); //don't move up or down
   }
  
-  this.cameras.main.centerOn(player.x, player.y); //centre camera on current position of player
+    this.cameras.main.centerOn(player.x, player.y); //centre camera on current position of player
+
+
 }
+
+
 
 </script>
  
