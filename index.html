@@ -48,7 +48,7 @@ var xLimit;
 function preload () { //this function loads images before the game starts
   //each image is given a name that is used to refer to it later on
   this.load.image('floor', 'assets/floor.jpg');
-  this.load.image('circle', 'assets/circle.png');
+  this.load.image('player', 'assets/player.png');
   this.load.image('obstacle','assets/obstacle.png');
 }
  
@@ -62,10 +62,12 @@ function create () { //this function creates sprites at the start of the game
   var playerp_ox = Phaser.Math.Between(955, 1920);
   var playerp_oy = Phaser.Math.Between(520, 1080);
 
-  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'circle'); //create the player sprite
-  player.setScale(0.4); //make it appear smaller
+  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player'); //create the player sprite
+  player.setScale(2); //make it appear smaller
  
   cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
+  keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
+  // -> { up: Key, left: Key, down: Key, right: Key }
  
   this.cameras.main.setBounds(-955, -520, xLimit+1920, yLimit+1080);
  
@@ -73,7 +75,8 @@ function create () { //this function creates sprites at the start of the game
   obstacles.create(800, 600, 'obstacle');
   obstacles.create(900, 800, 'obstacle');
  
-  this.physics.add.collider(player, obstacles); //collision detection between player and obstacles
+  this.physics.add.collider(player,obstacles); //collision detection between player and obstacles
+  player.setCircle(16,15,-2)
 
   this.text = this.add.text(player.x,player.y,'angle');
   this.posx = this.add.text(15,15,'positionx');
@@ -81,46 +84,64 @@ function create () { //this function creates sprites at the start of the game
   this.curx = this.add.text(45,45, 'curx');
   this.cury = this.add.text(60,60,'cury');
 
+
+
   this.input.on('pointermove', function(pointer) {
         var angle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
         player.setAngle(angle);
         this.text.text = 'angle: ' + angle;
-        this.posx.text = 'positionx ' + player.x;
-        this.posy.text = 'positiony ' + player.y;
         this.curx.text = 'pcurx ' + pointer.worldX;
         this.cury.text = 'pcury ' + pointer.worldY;
     }, this);
-
 
 
 }
 
 function update () { //this function runs every frame
 
-   this.text.setPosition(player.x-10, player.y-10);
+  this.posx.text = 'positionx ' + player.x;
+  this.posy.text = 'positiony ' + player.y;
+
+
+  this.text.setPosition(player.x-10, player.y-10);
          
-    this.posx.setPosition(player.x-30, player.y-30);
-    this.posy.setPosition(player.x-60, player.y-60);
+  this.posx.setPosition(player.x-60, player.y-60);
+  this.posy.setPosition(player.x-30, player.y-30);
 
-    this.curx.setPosition(player.x-90, player.y-90);
-    this.cury.setPosition(player.x-120, player.y-120);
+  this.curx.setPosition(player.x-90, player.y-90);
+  this.cury.setPosition(player.x-120, player.y-120);
 
-  if (cursors.left.isDown && player.x >= 0) {
+  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
       player.setVelocityX(-200); //go left
+      if(cursors.shift.isDown)
+      {
+        player.setVelocityX(-300);
+      }
   }
-  else if (cursors.right.isDown && player.x <= xLimit) {
+  else if ((cursors.right.isDown && player.x <= xLimit)  || (keys.right.isDown && player.x <= xLimit)) {
       player.setVelocityX(200); //go right
+      if(cursors.shift.isDown)
+      {
+        player.setVelocityX(300);
+      }
   }
   else {
       player.setVelocityX(0); //don't move left or right
   }
- 
-  if (cursors.up.isDown && player.y >= 0) {
+  if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
       player.setVelocityY(-200); //move up
+      if(cursors.shift.isDown)
+      {
+        player.setVelocityY(-300);
+      }
       
   }
-  else if (cursors.down.isDown && player.y <= yLimit) {
+  else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
       player.setVelocityY(200); //move down
+      if(cursors.shift.isDown)
+      {
+        player.setVelocityY(300);
+      }
   }
   else {
       player.setVelocityY(0); //don't move up or down
