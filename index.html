@@ -1,6 +1,6 @@
 <html>
 <head>
-    <script src="//cdn.jsdelivr.net/npm/phaser@3.20.0/dist/phaser.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@v3.16.2/dist/phaser.js"></script>
 </head>
 <body>
  
@@ -48,7 +48,7 @@ var xLimit;
 function preload () { //this function loads images before the game starts
   //each image is given a name that is used to refer to it later on
   this.load.image('floor', 'assets/floor.jpg');
-  this.load.image('player', 'assets/playerwithdrill.png');
+  this.load.image('player', 'assets/playerwithaxe.png');
   this.load.image('obstacle','assets/obstacle.png');
 }
  
@@ -61,9 +61,10 @@ function create () { //this function creates sprites at the start of the game
 //randomly generate x and y starting position
   var playerp_ox = Phaser.Math.Between(955, 1920);
   var playerp_oy = Phaser.Math.Between(520, 1080);
+  
 
   player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player'); //create the player sprite
-  player.setScale(2); //make it appear smaller
+  player.setScale(3); //make it appear smaller
  
   cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
   keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
@@ -72,11 +73,22 @@ function create () { //this function creates sprites at the start of the game
   this.cameras.main.setBounds(-955, -520, xLimit+1920, yLimit+1080);
  
   obstacles = this.physics.add.staticGroup(); //create group for obstacles
-  obstacles.create(800, 600, 'obstacle');
-  obstacles.create(900, 800, 'obstacle');
- 
+
+  var treeCount = 15;
+  var trees = [];
+
+  for (let i = 0; i < treeCount; i++) 
+  {
+    var treeLocX = Phaser.Math.Between(0,3825);
+    var treeLocY = Phaser.Math.Between(0,2155);
+
+    let1 = obstacles.create(treeLocX,treeLocY,'obstacle').setCircle(75);
+    trees[i] = let1;
+  }
+
+  
   this.physics.add.collider(player,obstacles); //collision detection between player and obstacles
-  player.setCircle(16,15,-2)
+  player.setCircle(16,15,-2);
 
   this.text = this.add.text(player.x,player.y,'angle');
   this.posx = this.add.text(15,15,'positionx');
@@ -110,6 +122,20 @@ function update () { //this function runs every frame
 
   this.curx.setPosition(player.x-90, player.y-90);
   this.cury.setPosition(player.x-120, player.y-120);
+
+
+  // for(let k = 0; k < 15; k++)
+  // {
+
+  //   var c = Phaser.Math.Between(player.x,player.y,trees[k].x,trees[k].y);
+
+  //   if(c <= 76)
+  //   {
+  //     player.setVelocityX(0);
+  //     player.setVelocityY(0);
+  //   }
+  // }
+
 
   if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
       player.setVelocityX(-200); //go left
