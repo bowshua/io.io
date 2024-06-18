@@ -47,25 +47,29 @@ var xLimit;
  
 function preload () { //this function loads images before the game starts
   //each image is given a name that is used to refer to it later on
-  this.load.image('floor', 'assets/floor.jpg');
+  this.load.image('floor', 'assets/therealtile.png');
   this.load.image('player', 'assets/playerwithaxe.png');
   this.load.image('obstacle','assets/obstacle.png');
 }
  
 function create () { //this function creates sprites at the start of the game
-  let background = this.add.image(0, 0, 'floor').setScale(3);
-  background.x = background.displayWidth / 2;
-  background.y = background.displayHeight / 2;
-  xLimit = background.displayWidth; //the player cannot go beyond these x and
-  yLimit = background.displayHeight; //y positions
-//randomly generate x and y starting position
-  var playerp_ox = Phaser.Math.Between(955, 1920);
-  var playerp_oy = Phaser.Math.Between(520, 1080);
   
 
-  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player'); //create the player sprite
-  player.setScale(3); //make it appear smaller
- 
+
+
+//randomly generate x and y starting position
+  var playerp_ox = Phaser.Math.Between(0, 4680);
+  var playerp_oy = Phaser.Math.Between(0, 4680);
+
+  //let background = this.add.image(234,234, 'floor').setScale(3);
+  
+
+  xLimit = 4680; //the player cannot go beyond these x and
+  yLimit = 4680; //y positions
+ //create the player sprite
+ //make it appear smaller
+  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
+  player.setScale(3);
   cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
   keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
   // -> { up: Key, left: Key, down: Key, right: Key }
@@ -92,9 +96,12 @@ function create () { //this function creates sprites at the start of the game
 
   this.text = this.add.text(player.x,player.y,'angle');
   this.posx = this.add.text(15,15,'positionx');
-  this.posy = this.add.text(30,30, 'positiony');
-  this.curx = this.add.text(45,45, 'curx');
-  this.cury = this.add.text(60,60,'cury');
+  this.posy = this.add.text(15,30, 'positiony');
+  this.curx = this.add.text(15,45, 'curx');
+  this.cury = this.add.text(15,60,'cury');
+  this.loadX = this.add.text(15,85,'loadX');
+  this.loadY = this.add.text(15,100, 'loadY');
+
 
 
 
@@ -106,10 +113,42 @@ function create () { //this function creates sprites at the start of the game
         this.cury.text = 'pcury ' + pointer.worldY;
     }, this);
 
-
 }
 
 function update () { //this function runs every frame
+  var backgroundx = [234,702,1170,1638,2106,2574,3042,3510,3978,4446];
+  var background = [];
+
+  var loadingX = [];
+  loadingX.push(closest(player.x-468-468,backgroundx));
+  loadingX.push(closest(player.x-468,backgroundx));
+  loadingX.push(closest(player.x,backgroundx));
+  loadingX.push(closest(player.x+468,backgroundx));
+  loadingX.push(closest(player.x+468+468,backgroundx));
+
+  var loadingY = [];
+  loadingY.push(closest(player.y-468,backgroundx));
+  loadingY.push(closest(player.y,backgroundx));
+  loadingY.push(closest(player.y+468,backgroundx));
+
+if(cursors.left.isDown || keys.left.isDown || cursors.right.isDown || keys.right.isDown || cursors.up.isDown || keys.up.isDown || cursors.down.isDown || keys.down.isDown) 
+{
+  for(let i = 0; i < loadingX.length; i++)
+  {
+    for(let j = 0; j < loadingY.length; j++)
+    {
+      background[i+j] = this.add.image(loadingX[i],loadingY[j], 'floor').setScale(3);
+      background[i+j].depth = -5;
+    }
+  }
+}
+
+  this.loadX.text = 'loadingX ' + loadingX;
+  this.loadY.text = 'loadingY ' + loadingY;
+
+  this.loadX.setPosition(player.x-10, player.y-150);
+  this.loadY.setPosition(player.x-10, player.y-175);
+
 
   this.posx.text = 'positionx ' + player.x;
   this.posy.text = 'positiony ' + player.y;
@@ -117,27 +156,15 @@ function update () { //this function runs every frame
 
   this.text.setPosition(player.x-10, player.y-10);
          
-  this.posx.setPosition(player.x-60, player.y-60);
-  this.posy.setPosition(player.x-30, player.y-30);
+  this.posx.setPosition(player.x-10, player.y-60);
+  this.posy.setPosition(player.x-10, player.y-30);
 
-  this.curx.setPosition(player.x-90, player.y-90);
-  this.cury.setPosition(player.x-120, player.y-120);
-
-
-  // for(let k = 0; k < 15; k++)
-  // {
-
-  //   var c = Phaser.Math.Between(player.x,player.y,trees[k].x,trees[k].y);
-
-  //   if(c <= 76)
-  //   {
-  //     player.setVelocityX(0);
-  //     player.setVelocityY(0);
-  //   }
-  // }
+  this.curx.setPosition(player.x-10, player.y-90);
+  this.cury.setPosition(player.x-10, player.y-120);
 
 
-  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
+  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) 
+  {
       player.setVelocityX(-200); //go left
       if(cursors.shift.isDown)
       {
@@ -175,7 +202,18 @@ function update () { //this function runs every frame
  
     this.cameras.main.centerOn(player.x,player.y);
 }
-
+function closest (num, arr) {
+                var curr = arr[0];
+                var diff = Math.abs (num - curr);
+                for (var val = 0; val < arr.length; val++) {
+                    var newdiff = Math.abs (num - arr[val]);
+                    if (newdiff < diff) {
+                        diff = newdiff;
+                        curr = arr[val];
+                    }
+                }
+                return curr;
+            }
 </script>
  
 </body>
