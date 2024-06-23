@@ -1,270 +1,301 @@
 <html>
+
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@v3.16.2/dist/phaser.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@v3.16.2/dist/phaser.js"></script>
 </head>
+
 <body>
- 
-<script>
 
-var config = { //create configuration for game
-  type: Phaser.Canvas,
-  roundPixels: true,
-    width: 4000,
-    height: 4000,
-    scale:
-    {
+  <script>
+
+    var config = { //create configuration for game
+      type: Phaser.Canvas,
+      roundPixels: true,
+      width: 4000,
+      height: 4000,
+      scale:
+      {
         mode: Phaser.Scale.ENVELOP,
-    },
-  physics: {
-    default: 'arcade', //the physics engine the game will use
-    arcade: {
-      fixedStep: false,
-      debug: true,
-      debugShowBody: true,
-      fps: 360
+      },
+      physics: {
+        default: 'arcade', //the physics engine the game will use
+        arcade: {
+          fixedStep: false,
+          debug: true,
+          debugShowBody: true,
+          fps: 360
+        }
+      },
+      scene: {
+        preload: preload,
+        create: create,
+        update: update
+      }
+    };
+
+    var game = new Phaser.Game(config); //create the game object
+
+    //initialise global variables
+    var player;
+    var obstacles;
+    var cursors;
+
+    var yLimit;
+    var xLimit;
+
+    
+    const background_width = 468
+    var background = [[]];
+
+    function preload() { //this function loads images before the game starts
+      //each image is given a name that is used to refer to it later on
+      this.load.image('floor', 'assets/therealtile.png');
+      this.load.image('player', 'assets/playerwithaxe.png');
+      this.load.image('obstacle', 'assets/obstacle.png');
     }
-  },
-  scene: {
-    preload: preload,
-    create: create,
-    update: update
-  }
-};
- 
-var game = new Phaser.Game(config); //create the game object
- 
-//initialise global variables
-var player;
-var obstacles;
-var cursors;
- 
-var yLimit;
-var xLimit;
- 
-function preload () { //this function loads images before the game starts
-  //each image is given a name that is used to refer to it later on
-  this.load.image('floor', 'assets/therealtile.png');
-  this.load.image('player', 'assets/playerwithaxe.png');
-  this.load.image('obstacle','assets/obstacle.png');
-}
- 
-function create () { //this function creates sprites at the start of the game
-  
 
+    function closestChunkBoundary(position) {
+      // position = Math.floor(position)
+      return Math.floor(position / background_width) * background_width
+    }
 
-
-//randomly generate x and y starting position
-  var playerp_ox = Phaser.Math.Between(0, 4680);
-  var playerp_oy = Phaser.Math.Between(0, 4680);
-
-  
-
-  xLimit = 4680; //the player cannot go beyond these x and
-  yLimit = 4680; //y positions
- //create the player sprite
- //make it appear smaller
-  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
-  player.setScale(3);
-  cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
-  keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
-  // -> { up: Key, left: Key, down: Key, right: Key }
- 
-  this.cameras.main.setBounds(-955, -520, xLimit+1920, yLimit+1080);
- 
-  obstacles = this.physics.add.staticGroup(); //create group for obstacles
-
-  var treeCount = 15;
-  var trees = [];
-
-  for (let i = 0; i < treeCount; i++) 
-  {
-    var treeLocX = Phaser.Math.Between(0,3825);
-    var treeLocY = Phaser.Math.Between(0,2155);
-
-    let1 = obstacles.create(treeLocX,treeLocY,'obstacle').setCircle(75);
-    trees[i] = let1;
-  }
-
-  
-  this.physics.add.collider(player,obstacles); //collision detection between player and obstacles
-  player.setCircle(16,15,-2);
-
-  this.text = this.add.text(player.x,player.y,'angle');
-  this.posx = this.add.text(15,15,'positionx');
-  this.posy = this.add.text(15,30, 'positiony');
-  this.curx = this.add.text(15,45, 'curx');
-  this.cury = this.add.text(15,60,'cury');
-  this.loadX = this.add.text(15,85,'loadX');
-  this.loadY = this.add.text(15,100, 'loadY');
-  this.removPosX = this.add.text(15,150, 'removPosX');
-  this.imagexpos = this.add.text(15,175, 'imagexpos');
+    function create() { //this function creates sprites at the start of the game
 
 
 
 
-  this.input.on('pointermove', function(pointer) {
+      //randomly generate x and y starting position
+      var playerp_ox = Phaser.Math.Between(0, 4680);
+      var playerp_oy = Phaser.Math.Between(0, 4680);
+
+
+
+      xLimit = 4680; //the player cannot go beyond these x and
+      yLimit = 4680; //y positions
+      //create the player sprite
+      //make it appear smaller
+
+      console.log("PLAYER ", playerp_ox, playerp_oy)
+
+      for (var i = background_width * -1; i <= background_width * 2; i += background_width) {
+        var xArray = []
+        for (var j = background_width * -1; j <= background_width * 2; j += background_width) {
+          // player.x = 758 / background_width = 1 * background_width = 468
+          // positions
+          let xPos = playerp_ox + i
+          let yPos = playerp_oy + j
+          let xBoundary = closestChunkBoundary(xPos)
+          let yBoundary = closestChunkBoundary(yPos)
+          
+          // modify image
+          var image = this.add.image(xBoundary, yBoundary, 'floor')
+          image.setScale(3)
+          image.depth = -5
+
+          // add image
+          console.log(xBoundary, yBoundary)
+          xArray.push(image);
+        }
+        background.push(xArray)
+      }
+
+
+      player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
+      player.setScale(3);
+      cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
+      keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
+      // -> { up: Key, left: Key, down: Key, right: Key }
+
+      this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
+
+      obstacles = this.physics.add.staticGroup(); //create group for obstacles
+
+      var treeCount = 15;
+      var trees = [];
+
+      for (let i = 0; i < treeCount; i++) {
+        var treeLocX = Phaser.Math.Between(0, 3825);
+        var treeLocY = Phaser.Math.Between(0, 2155);
+
+        let1 = obstacles.create(treeLocX, treeLocY, 'obstacle').setCircle(75);
+        trees[i] = let1;
+
+      }
+
+
+      this.physics.add.collider(player, obstacles); //collision detection between player and obstacles
+      player.setCircle(16, 15, -2);
+
+      this.text = this.add.text(player.x, player.y, 'angle');
+      this.posx = this.add.text(15, 15, 'positionx');
+      this.posy = this.add.text(15, 30, 'positiony');
+      this.curx = this.add.text(15, 45, 'curx');
+      this.cury = this.add.text(15, 60, 'cury');
+      this.loadX = this.add.text(15, 85, 'loadX');
+      this.loadY = this.add.text(15, 100, 'loadY');
+      this.removPosX = this.add.text(15, 150, 'removPosX');
+      this.imagexpos = this.add.text(15, 175, 'imagexpos');
+
+
+
+
+      this.input.on('pointermove', function (pointer) {
         var angle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
         player.setAngle(angle);
         this.text.text = 'angle: ' + angle;
         this.curx.text = 'pcurx ' + pointer.worldX;
         this.cury.text = 'pcury ' + pointer.worldY;
-    }, this);
+      }, this);
 
-}
+    }
 
-function update () { //this function runs every frame
+    function update() { //this function runs every frame
 
-  //all background spawn locations of the image its a grid so no need for y variant
-  var backgroundx = [234,702,1170,1638,2106,2574,3042,3510,3978,4446];
-  // 2d array that holds the tile images
-  var background = [[]];
-  //locations of tiles that are being loaded
-  //5x3 grid
-  var loadingX = [];
-  loadingX.push(closest(player.x-468-468,backgroundx));
-  loadingX.push(closest(player.x-468,backgroundx));
-  loadingX.push(closest(player.x,backgroundx));
-  loadingX.push(closest(player.x+468,backgroundx));
-  loadingX.push(closest(player.x+468+468,backgroundx));
+      //all background spawn locations of the image its a grid so no need for y variant
+      // var backgroundx = [234, 702, 1170, 1638, 2106, 2574, 3042, 3510, 3978, 4446];
+      // // 2d array that holds the tile images
+      // //var background = [[]];
+      // //locations of tiles that are being loaded
+      // //5x3 grid
+      // var loadingX = [];
+      // loadingX.push(closest(player.x - 468 - 468, backgroundx));
+      // loadingX.push(closest(player.x - 468, backgroundx));
+      // loadingX.push(closest(player.x, backgroundx));
+      // loadingX.push(closest(player.x + 468, backgroundx));
+      // loadingX.push(closest(player.x + 468 + 468, backgroundx));
 
-  //locations of y tiles that are being loaded
-  var loadingY = [];
-  loadingY.push(closest(player.y-468,backgroundx));
-  loadingY.push(closest(player.y,backgroundx));
-  loadingY.push(closest(player.y+468,backgroundx));
+      // //locations of y tiles that are being loaded
+      // var loadingY = [];
+      // loadingY.push(closest(player.y - 468, backgroundx));
+      // loadingY.push(closest(player.y, backgroundx));
+      // loadingY.push(closest(player.y + 468, backgroundx));
 
-  //x tile positions that need to be removed
-  var removalPositionsX = backgroundx.filter(x => !loadingX.includes(x));
+      // //x tile positions that need to be removed
+      // var removalPositionsX = backgroundx.filter(x => !loadingX.includes(x));
 
 
-  //place tessalation pattern based on the loading buffer arrays
-    for(let i = 0; i < loadingX.length; i++)
-    {
-      for(let j = 0; j < loadingY.length; j++)
-      {
-        background[[i][j]] = this.add.image(loadingX[i],loadingY[j], 'floor').setScale(3);
-        background[[i][j]].depth = -5;
-        this.imagexpos.text = 'image xpos ' + background[[i][j]].x;
+      //place tessalation pattern based on the loading buffer arrays
+      // for(let i = 0; i < loadingX.length; i++)
+      // {
+      //   for(let j = 0; j < loadingY.length; j++)
+      //   {
+      //     background[[i][j]] = this.add.image(loadingX[i],loadingY[j], 'floor').setScale(3);
+      //     background[[i][j]].depth = -5;
+      //     this.imagexpos.text = 'image xpos ' + background[[i][j]].x;
+      //   }
+      // }
+
+      //supposed to remove tiles but doesnt work for shit
+      //   for(let i = 0; i < loadingX.length; i++)
+      //   {
+      //     for(let j = 0; j < loadingY.length; j++)
+      //     {
+      //       for(let m = 0; m < removalPositionsX.length; m++)
+      //       {
+      //         if(background[[i][j]].x == removalPositionsX[m])
+      //         {
+      //           background[[i][j]].destroy();
+      //         }
+      //       }
+      //     }
+      // }
+
+
+
+      //debugging shit for positioning
+      this.imagexpos.setPosition(player.x - 10, player.y - 215);
+
+
+     // this.removPosX.text = 'removalPosX ' + removalPositionsX;
+
+      // this.removPosX.setPosition(player.x - 10, player.y - 200);
+
+
+      // this.loadX.text = 'loadingX ' + loadingX;
+      // this.loadY.text = 'loadingY ' + loadingY;
+
+      // this.loadX.setPosition(player.x - 10, player.y - 150);
+      // this.loadY.setPosition(player.x - 10, player.y - 175);
+
+
+      this.posx.text = 'positionx ' + player.x;
+      this.posy.text = 'positiony ' + player.y;
+
+
+      this.text.setPosition(player.x - 10, player.y - 10);
+
+      this.posx.setPosition(player.x - 10, player.y - 60);
+      this.posy.setPosition(player.x - 10, player.y - 30);
+
+      this.curx.setPosition(player.x - 10, player.y - 90);
+      this.cury.setPosition(player.x - 10, player.y - 120);
+
+
+
+
+      handlePlayerMovement()
+
+      this.cameras.main.centerOn(player.x, player.y);
+
+      mapTesselation()
+    }
+
+    function handlePlayerMovement() {
+      //player movement
+      if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
+        player.setVelocityX(-200); //go left
+        if (cursors.shift.isDown) {
+          player.setVelocityX(-300);
+        }
+      }
+      else if ((cursors.right.isDown && player.x <= xLimit) || (keys.right.isDown && player.x <= xLimit)) {
+        player.setVelocityX(200); //go right
+        if (cursors.shift.isDown) {
+          player.setVelocityX(300);
+        }
+      }
+      else {
+        player.setVelocityX(0); //don't move left or right
+      }
+      if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
+        player.setVelocityY(-200); //move up
+        if (cursors.shift.isDown) {
+          player.setVelocityY(-300);
+        }
+
+      }
+      else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
+        player.setVelocityY(200); //move down
+        if (cursors.shift.isDown) {
+          player.setVelocityY(300);
+        }
+      }
+      else {
+        player.setVelocityY(0); //don't move up or down
       }
     }
-  
-    //supposed to remove tiles but doesnt work for shit
-  //   for(let i = 0; i < loadingX.length; i++)
-  //   {
-  //     for(let j = 0; j < loadingY.length; j++)
-  //     {
-  //       for(let m = 0; m < removalPositionsX.length; m++)
-  //       {
-  //         if(background[[i][j]].x == removalPositionsX[m])
-  //         {
-  //           background[[i][j]].destroy();
-  //         }
-  //       }
-  //     }
-  // }
 
-  
-
-  //debugging shit for positioning
-  this.imagexpos.setPosition(player.x-10,player.y-215);
-
-
-  this.removPosX.text = 'removalPosX ' + removalPositionsX;
-
-  this.removPosX.setPosition(player.x-10, player.y-200);
-
-
-  this.loadX.text = 'loadingX ' + loadingX;
-  this.loadY.text = 'loadingY ' + loadingY;
-
-  this.loadX.setPosition(player.x-10, player.y-150);
-  this.loadY.setPosition(player.x-10, player.y-175);
-
-
-  this.posx.text = 'positionx ' + player.x;
-  this.posy.text = 'positiony ' + player.y;
-
-
-  this.text.setPosition(player.x-10, player.y-10);
-         
-  this.posx.setPosition(player.x-10, player.y-60);
-  this.posy.setPosition(player.x-10, player.y-30);
-
-  this.curx.setPosition(player.x-10, player.y-90);
-  this.cury.setPosition(player.x-10, player.y-120);
-
-
-  //lol???? doesnt it auto pop after each update cycle
-  loadingX.pop();
-  loadingX.pop();
-  loadingX.pop();
-  loadingX.pop();
-  loadingX.pop();
-  loadingY.pop();
-  loadingY.pop();
-  loadingY.pop();
-
-
-  //player movement
-  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) 
-  {
-      player.setVelocityX(-200); //go left
-      if(cursors.shift.isDown)
-      {
-        player.setVelocityX(-300);
-      }
-  }
-  else if ((cursors.right.isDown && player.x <= xLimit)  || (keys.right.isDown && player.x <= xLimit)) {
-      player.setVelocityX(200); //go right
-      if(cursors.shift.isDown)
-      {
-        player.setVelocityX(300);
-      }
-  }
-  else {
-      player.setVelocityX(0); //don't move left or right
-  }
-  if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
-      player.setVelocityY(-200); //move up
-      if(cursors.shift.isDown)
-      {
-        player.setVelocityY(-300);
-      }
+    function mapTesselation() {
       
-  }
-  else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
-      player.setVelocityY(200); //move down
-      if(cursors.shift.isDown)
-      {
-        player.setVelocityY(300);
+    }
+
+    //stole someones code ez
+    function closest(num, arr) {
+      var curr = arr[0];
+      var diff = Math.abs(num - curr);
+      for (var val = 0; val < arr.length; val++) {
+        var newdiff = Math.abs(num - arr[val]);
+        if (newdiff < diff) {
+          diff = newdiff;
+          curr = arr[val];
+        }
       }
-  }
-  else {
-      player.setVelocityY(0); //don't move up or down
-  }
- 
-    this.cameras.main.centerOn(player.x,player.y);
-}
-
-//stole someones code ez
-function closest (num, arr) {
-                var curr = arr[0];
-                var diff = Math.abs (num - curr);
-                for (var val = 0; val < arr.length; val++) {
-                    var newdiff = Math.abs (num - arr[val]);
-                    if (newdiff < diff) {
-                        diff = newdiff;
-                        curr = arr[val];
-                    }
-                }
-                return curr;
-            }
+      return curr;
+    }
 
 
-</script>
- 
+  </script>
+
 </body>
+
 </html>
-
-
-
