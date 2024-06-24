@@ -39,6 +39,7 @@
     var player;
     var obstacles;
     var cursors;
+    var resourceCollision = false;
 
     var yLimit;
     var xLimit;
@@ -54,9 +55,10 @@
 
     function preload() { //this function loads images before the game starts
       //each image is given a name that is used to refer to it later on
-      this.load.image('floor', 'assets/therealtile.png');
-      this.load.image('player', 'assets/player.png');
-      this.load.image('obstacle', 'assets/obstacle.png');
+      this.load.image('floor', 'assets/therealtile.png')
+      this.load.image('player', 'assets/playerwithaxe.png')
+      this.load.image('obstacle', 'assets/tree.png')
+      this.load.image('rock', 'assets/rock.png')
     }
 
     function closestChunkBoundary(position) {
@@ -109,13 +111,8 @@
 
       player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
       player.setScale(3);
-      // player.frame.rotated = true;
-      // player.frame.cutHeight = 30;
-      // player.frame.cutWidth = 30;
-      // player.frame.pivotX = 15;
-      // player.frame.pivotY = 15;
 
-      console.log(player)
+      pointer = this.input.activePointer;
       cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
       keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
       // -> { up: Key, left: Key, down: Key, right: Key }
@@ -124,19 +121,31 @@
 
       obstacles = this.physics.add.staticGroup(); //create group for obstacles
 
-      var treeCount = 15;
+      var treeCount = 20;
       var trees = [];
+      var rocks = [];
 
       for (let i = 0; i < treeCount; i++) {
-        var treeLocX = Phaser.Math.Between(0, 3825);
-        var treeLocY = Phaser.Math.Between(0, 2155);
+        var treeLocX = Phaser.Math.Between(0, 4680);
+        var treeLocY = Phaser.Math.Between(0, 4680);
 
-        let1 = obstacles.create(treeLocX, treeLocY, 'obstacle').setCircle(75);
+        var rockLocX = Phaser.Math.Between(63, 380);
+        var rockLocY = Phaser.Math.Between(63, 380);
+
+
+        let1 = obstacles.create(treeLocX, treeLocY, 'obstacle').setScale(3);
+        let2 = obstacles.create(treeLocX+rockLocX, treeLocY+rockLocY, 'rock').setScale(3);
+        rocks[i] = let2;
         trees[i] = let1;
 
       }
 
-      this.physics.add.collider(player, obstacles); //collision detection between player and obstacles
+      this.physics.add.collider(player, obstacles, function()
+      {
+        resourceCollision = true;
+      }
+    
+    ); //collision detection between player and obstacles
       player.setCircle(16, 15, 15);
 
       this.text = this.add.text(player.x, player.y, 'angle');
@@ -171,7 +180,7 @@
       this.cury.setPosition(player.x - 10, player.y - 120);
 
       handlePlayerMovement()
-
+      farmSystem()
       this.cameras.main.centerOn(player.x, player.y);
 
       let playerChunkDidChange = updatePlayerChunk()
@@ -179,6 +188,17 @@
         mapTesselation()
       }
     }
+
+
+    function farmSystem()
+    {
+      //checks if player is colliding with resource obstacle
+      if(resourceCollision && pointer.isDown)
+      {
+        console.log('gyatt')
+      }
+    }
+
 
     function handlePlayerMovement() {
       //player movement
