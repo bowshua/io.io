@@ -37,9 +37,13 @@
 
     //initialise global variables
     var player;
-    var obstacles;
+    var tree;
+    var rock;
     var cursors;
-    var resourceCollision = false;
+    var rockCollision = false;
+    var treeCollision = false;
+    var resourceWood = 0;
+    var resourceStone = 0;
 
     var yLimit;
     var xLimit;
@@ -57,7 +61,7 @@
       //each image is given a name that is used to refer to it later on
       this.load.image('floor', 'assets/therealtile.png')
       this.load.image('player', 'assets/playerwithaxe.png')
-      this.load.image('obstacle', 'assets/tree.png')
+      this.load.image('tree', 'assets/tree.png')
       this.load.image('rock', 'assets/rock.png')
     }
 
@@ -119,9 +123,11 @@
 
       this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
 
-      obstacles = this.physics.add.staticGroup(); //create group for obstacles
+      tree = this.physics.add.staticGroup(); //create group for trees
+      rock = this.physics.add.staticGroup();
 
       var treeCount = 20;
+      var rockCount = 20;
       var trees = [];
       var rocks = [];
 
@@ -133,22 +139,32 @@
         var rockLocY = Phaser.Math.Between(63, 380);
 
 
-        let1 = obstacles.create(treeLocX, treeLocY, 'obstacle').setScale(3);
-        let2 = obstacles.create(treeLocX+rockLocX, treeLocY+rockLocY, 'rock').setScale(3);
+        let1 = tree.create(treeLocX, treeLocY, 'tree').setScale(3);
+        let2 = rock.create(treeLocX+rockLocX, treeLocY+rockLocY, 'rock').setScale(3);
         rocks[i] = let2;
         trees[i] = let1;
 
       }
 
-      this.physics.add.collider(player, obstacles, function()
+      this.physics.add.collider(player, trees, function()
       {
-        resourceCollision = true;
-      }
+        treeCollision = true;
+      }, null, this
+  
     
-    ); //collision detection between player and obstacles
+    ); //collision detection between player and trees
+
+    this.physics.add.collider(player,rocks,function()
+    {
+      rockCollision = true;
+    }, null, this)
+
+
       player.setCircle(16, 15, 15);
 
       this.text = this.add.text(player.x, player.y, 'angle');
+      this.treeCount = this.add.text(player.x-900,player.y-500, 'Wood: ' + resourceWood)
+      this.rockCount = this.add.text(player.x-900, player.y-525, 'Stone: ' + resourceStone)
       this.posx = this.add.text(15, 15, 'positionx');
       this.posy = this.add.text(15, 30, 'positiony');
       this.curx = this.add.text(15, 45, 'curx');
@@ -167,9 +183,14 @@
 
     function update() { //this function runs every frame
       //debugging shit for positioning
-
       this.posx.text = 'positionx ' + player.x;
       this.posy.text = 'positiony ' + player.y;
+
+      this.treeCount.text = 'Wood: ' + Math.trunc(resourceWood)
+      this.treeCount.setPosition(player.x-900,player.y-500)
+
+      this.rockCount.text = 'Stone: ' + Math.trunc(resourceStone)
+      this.rockCount.setPosition(player.x-900,player.y-525)
 
       this.text.setPosition(player.x - 10, player.y - 10);
 
@@ -189,14 +210,26 @@
       }
     }
 
-
     function farmSystem()
     {
-      //checks if player is colliding with resource obstacle
-      if(resourceCollision && pointer.isDown)
+      //checks if player is colliding with resource tree
+      if(rockCollision && treeCollision && pointer.isDown)
       {
-        console.log('gyatt')
+        resourceStone+= 0.01
+        resourceWood += 0.01
       }
+      else if(treeCollision && pointer.isDown)
+      {
+        resourceWood += 0.01
+      }
+      else if(rockCollision && pointer.isDown)
+      {
+        resourceStone += 0.01
+      }
+
+      
+      rockCollision = false;
+      treeCollision = false;
     }
 
 
@@ -264,6 +297,7 @@
         iIndex++
       }
     }
+    
 
   </script>
 
