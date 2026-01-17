@@ -1,306 +1,402 @@
+<!DOCTYPE html>
 <html>
 
 <head>
+  <meta charset="utf-8">
+  <title>Phaser Fullscreen Game</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@v3.16.2/dist/phaser.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+    }
+
+    #game-container {
+      width: 1920px;
+      height: 1080px;
+      margin: auto;
+    }
+  </style>
 </head>
 
 <body>
 
-  <script>
+<div id="game-container"></div>
 
-    var config = { //create configuration for game
-      type: Phaser.Canvas,
-      roundPixels: true,
-      width: 1920,
-      height: 1080,
-      scale:
-      {
-        mode: Phaser.Scale.ENVELOP,
-      },
-      physics: {
-        default: 'arcade', //the physics engine the game will use
-        arcade: {
-          fixedStep: false,
-          debug: true,
-          debugShowBody: true,
-          fps: 360
-        }
-      },
-      scene: {
-        preload: preload,
-        create: create,
-        update: update
-      }
-    };
+<script>
 
-    var game = new Phaser.Game(config); //create the game object
-
-    //initialise global variables
-    var player;
-    var tree;
-    var rock;
-    var cursors;
-    var rockCollision = false;
-    var treeCollision = false;
-    var resourceWood = 0;
-    var resourceStone = 0;
-
-    var yLimit;
-    var xLimit;
-
-    
-    const background_size = 468
-    const background_chunk_width = 8
-    const background_chunk_height = 5
-    var background = [];
-
-    var playerXChunk = undefined
-    var playerYChunk = undefined
-
-    function preload() { //this function loads images before the game starts
-      //each image is given a name that is used to refer to it later on
-      this.load.image('floor', 'assets/therealtile.png')
-      this.load.image('player', 'assets/playerwithaxe.png')
-      this.load.image('tree', 'assets/tree.png')
-      this.load.image('rock', 'assets/rock.png')
+var config = {
+  type: Phaser.Canvas,
+  roundPixels: true,
+  width: 1920,
+  height: 1080,
+  parent: 'game-container',
+  physics: {
+    default: 'arcade',
+    arcade: {
+      fixedStep: false,
+      debug: true,
+      debugShowBody: true,
+      fps: 360
     }
+  },
+  scene: {
+    preload: preload,
+    create: create,
+    update: update
+  }
+};
 
-    function closestChunkBoundary(position) {
-      // position = Math.floor(position)
-      return Math.floor(position / background_size) * background_size
+var game = new Phaser.Game(config);
+
+// ================= GLOBAL VARIABLES =================
+var player;
+var tree;
+var rock;
+var iron;
+
+var cursors;
+var keys;
+var pointer;
+
+// CONTACT COUNTS (PER FRAME)
+var treeTouchCount = 0;
+var rockTouchCount = 0;
+var ironTouchCount = 0;
+
+// RESOURCES
+var resourceWood = 0;
+var resourceStone = 0;
+var resourceIron = 0;
+
+// FARM RATE PER OBJECT
+const FARM_RATE = 0.01;
+
+var yLimit;
+var xLimit;
+
+const background_size = 468;
+const background_chunk_width = 8;
+const background_chunk_height = 5;
+var background = [];
+
+var playerXChunk = undefined;
+var playerYChunk = undefined;
+
+// ================= HOTBAR =================
+const HOTBAR_SLOTS = 9;
+var hotbarSlots = [];
+var hotbarIcons = [];
+var selectedHotbarSlot = 0;
+
+// ================= PRELOAD =================
+function preload() {
+  this.load.image('floor', 'assets/therealtile.png');
+  this.load.image('player', 'assets/playerwithaxe.png');
+  this.load.image('tree', 'assets/tree.png');
+  this.load.image('rock', 'assets/rock.png');
+  this.load.image('iron', 'assets/iron.png');
+  this.load.image('axe', 'assets/axe.png');
+}
+
+// ================= HELPERS =================
+function closestChunkBoundary(position) {
+  return Math.floor(position / background_size) * background_size;
+}
+
+function backgroundDifferenceBehind(count) {
+  return background_size * Math.ceil(count / -2);
+}
+
+function backgroundDifferenceInFront(count) {
+  return background_size * Math.floor(count / 2);
+}
+
+// ================= CREATE =================
+function create() {
+
+  var playerp_ox = Phaser.Math.Between(0, 4680);
+  var playerp_oy = Phaser.Math.Between(0, 4680);
+
+  playerXChunk = closestChunkBoundary(playerp_ox);
+  playerYChunk = closestChunkBoundary(playerp_oy);
+
+  xLimit = 4680;
+  yLimit = 4680;
+
+  // ===== BACKGROUND =====
+  for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
+    var xArray = [];
+    for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
+      var image = this.add.image(
+        closestChunkBoundary(playerp_ox + i),
+        closestChunkBoundary(playerp_oy + j),
+        'floor'
+      );
+      image.setScale(3);
+      image.depth = -5;
+      xArray.push(image);
     }
+    background.push(xArray);
+  }
 
-    function backgroundDifferenceBehind(count) {
-      return background_size * Math.ceil(count / -2)
-    }
+  // ===== PLAYER =====
+  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
+  player.setScale(3);
+  player.setCircle(16, 15, 15);
 
-    function backgroundDifferenceInFront(count) {
-      return background_size * Math.floor(count / 2)
-    }
+  pointer = this.input.activePointer;
+  cursors = this.input.keyboard.createCursorKeys();
+  keys = this.input.keyboard.addKeys({
+    up: 'W', left: 'A', down: 'S', right: 'D',
+    one: 'ONE', two: 'TWO', three: 'THREE', four: 'FOUR',
+    five: 'FIVE', six: 'SIX', seven: 'SEVEN', eight: 'EIGHT', nine: 'NINE'
+  });
 
-    function create() { //this function creates sprites at the start of the game
-      //randomly generate x and y starting position
-      var playerp_ox = Phaser.Math.Between(0, 4680);
-      var playerp_oy = Phaser.Math.Between(0, 4680);
+  this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
 
-      playerXChunk = closestChunkBoundary(playerp_ox)
-      playerYChunk = closestChunkBoundary(playerp_oy)
+  // ===== WORLD EDGE DARKENING OVERLAY =====
 
-      xLimit = 4680; //the player cannot go beyond these x and
-      yLimit = 4680; //y positions
-      //create the player sprite
-      //make it appear smaller
+  // Dark overlay (covers everything)
+  this.worldEdgeOverlay = this.add.graphics();
+  this.worldEdgeOverlay.fillStyle(0x000000, 0.35);
+  this.worldEdgeOverlay.fillRect(
+    -2000, -2000,
+    xLimit + 4000,
+    yLimit + 4000
+  );
 
-      for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
-        var xArray = []
-        for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
-          // player.x = 758 / background_width = 1 * background_width = 468
-          // positions
-          let xPos = playerp_ox + i
-          let yPos = playerp_oy + j
-          let xBoundary = closestChunkBoundary(xPos)
-          let yBoundary = closestChunkBoundary(yPos)
-          
-          // modify image
-          var image = this.add.image(xBoundary, yBoundary, 'floor')
-          image.setScale(3)
-          image.depth = -5
+  // Mask shape (playable area hole)
+  this.worldEdgeMask = this.make.graphics({ x: 0, y: 0, add: false });
+  this.worldEdgeMask.fillStyle(0xffffff, 0);
+  this.worldEdgeMask.fillRect(0, 0, xLimit, yLimit);
 
-          // add image
-          xArray.push(image);
-        }
-        background.push(xArray)
-      }
-      
+  // Apply mask
+  this.worldEdgeOverlay.setMask(
+  new Phaser.Display.Masks.GeometryMask(this, this.worldEdgeMask)
+  );
 
-      player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
-      player.setScale(3);
+  // Depth: above grass, below player
+  this.worldEdgeOverlay.depth = -4;
 
-      pointer = this.input.activePointer;
-      cursors = this.input.keyboard.createCursorKeys(); //creates an object containing hotkeys
-      keys = this.input.keyboard.addKeys({ up: 'W', left: 'A', down: 'S', right: 'D' });
-      // -> { up: Key, left: Key, down: Key, right: Key }
-
-      this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
-
-      tree = this.physics.add.staticGroup(); //create group for trees
-      rock = this.physics.add.staticGroup();
-
-      var treeCount = 20;
-      var rockCount = 20;
-      var trees = [];
-      var rocks = [];
-
-      for (let i = 0; i < treeCount; i++) {
-        var treeLocX = Phaser.Math.Between(0, 4680);
-        var treeLocY = Phaser.Math.Between(0, 4680);
-
-        var rockLocX = Phaser.Math.Between(63, 380);
-        var rockLocY = Phaser.Math.Between(63, 380);
-
-
-        let1 = tree.create(treeLocX, treeLocY, 'tree').setScale(3);
-        let2 = rock.create(treeLocX+rockLocX, treeLocY+rockLocY, 'rock').setScale(3);
-        rocks[i] = let2;
-        trees[i] = let1;
-
-      }
-
-      this.physics.add.collider(player, trees, function()
-      {
-        treeCollision = true;
-      }, null, this
   
-    
-    ); //collision detection between player and trees
 
-    this.physics.add.collider(player,rocks,function()
-    {
-      rockCollision = true;
-    }, null, this)
+  // ===== RESOURCE GROUPS =====
+  tree = this.physics.add.staticGroup();
+  rock = this.physics.add.staticGroup();
+  iron = this.physics.add.staticGroup();
 
+  for (let i = 0; i < 20; i++) {
+    let tx = Phaser.Math.Between(0, 4680);
+    let ty = Phaser.Math.Between(0, 4680);
 
-      player.setCircle(16, 15, 15);
+    tree.create(tx, ty, 'tree').setScale(3);
+    rock.create(tx + Phaser.Math.Between(60, 300), ty + Phaser.Math.Between(60, 300), 'rock').setScale(3);
+    iron.create(tx + Phaser.Math.Between(120, 450), ty + Phaser.Math.Between(120, 450), 'iron').setScale(3);
+  }
 
-      this.text = this.add.text(player.x, player.y, 'angle');
-      this.treeCount = this.add.text(player.x-900,player.y-500, 'Wood: ' + resourceWood)
-      this.rockCount = this.add.text(player.x-900, player.y-525, 'Stone: ' + resourceStone)
-      this.posx = this.add.text(15, 15, 'positionx');
-      this.posy = this.add.text(15, 30, 'positiony');
-      this.curx = this.add.text(15, 45, 'curx');
-      this.cury = this.add.text(15, 60, 'cury');
+  this.physics.add.collider(player, tree, () => treeTouchCount++);
+  this.physics.add.collider(player, rock, () => rockTouchCount++);
+  this.physics.add.collider(player, iron, () => ironTouchCount++);
 
+  // ===== HUD =====
+  this.treeCount = this.add.text(20, 20, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
+  this.rockCount = this.add.text(20, 45, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
+  this.ironCount = this.add.text(20, 70, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
 
-      this.input.on('pointermove', function (pointer) {
-        var angle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
-        player.setAngle(angle);
-        this.text.text = 'angle: ' + angle;
-        this.curx.text = 'pcurx ' + pointer.worldX;
-        this.cury.text = 'pcury ' + pointer.worldY;
-      }, this);
+  // ===== DIAGNOSTIC TEXT (RESTORED) =====
+  this.angleText = this.add.text(player.x, player.y, '');
+  this.posx = this.add.text(player.x, player.y, '');
+  this.posy = this.add.text(player.x, player.y, '');
+  this.curx = this.add.text(player.x, player.y, '');
+  this.cury = this.add.text(player.x, player.y, '');
 
+  this.input.on('pointermove', function (pointer) {
+    var angle = Phaser.Math.RAD_TO_DEG *
+      Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
+
+    player.setAngle(angle);
+    this.angleText.text = 'angle: ' + angle.toFixed(2);
+    this.curx.text = 'pcurx ' + pointer.worldX.toFixed(1);
+    this.cury.text = 'pcury ' + pointer.worldY.toFixed(1);
+  }, this);
+
+  // ===== FULLSCREEN BUTTON =====
+  this.fullscreenButton = this.add.text(1900, 20, '[ FULLSCREEN ]', {
+    font: '16px Arial',
+    fill: '#ffffff',
+    backgroundColor: '#000000',
+    padding: { x: 6, y: 4 }
+  })
+    .setOrigin(1, 0)
+    .setScrollFactor(0)
+    .setInteractive({ useHandCursor: true })
+    .setDepth(1000);
+
+  this.fullscreenButton.on('pointerup', () => {
+    if (!this.scale.isFullscreen) this.scale.startFullscreen();
+    else this.scale.stopFullscreen();
+  });
+
+  this.scale.on('enterfullscreen', () => this.fullscreenButton.setText('[ EXIT FULLSCREEN ]'));
+  this.scale.on('leavefullscreen', () => this.fullscreenButton.setText('[ FULLSCREEN ]'));
+
+  // ===== HOTBAR UI =====
+  createHotbar.call(this);
+}
+
+// ================= UPDATE =================
+function update() {
+
+  this.treeCount.text = 'Wood: ' + Math.trunc(resourceWood);
+  this.rockCount.text = 'Stone: ' + Math.trunc(resourceStone);
+  this.ironCount.text = 'Iron: ' + Math.trunc(resourceIron);
+
+  this.angleText.setPosition(player.x - 10, player.y - 10);
+  this.posx.setPosition(player.x - 10, player.y - 60);
+  this.posy.setPosition(player.x - 10, player.y - 30);
+  this.curx.setPosition(player.x - 10, player.y - 90);
+  this.cury.setPosition(player.x - 10, player.y - 120);
+
+  this.posx.text = 'positionx ' + player.x.toFixed(1);
+  this.posy.text = 'positiony ' + player.y.toFixed(1);
+
+  handlePlayerMovement();
+  handleHotbarInput();
+  farmSystem();
+
+  this.cameras.main.centerOn(player.x, player.y);
+
+  if (updatePlayerChunk()) {
+    mapTesselation();
+  }
+
+  treeTouchCount = 0;
+  rockTouchCount = 0;
+  ironTouchCount = 0;
+}
+
+// ================= HOTBAR FUNCTIONS =================
+function createHotbar() {
+  const slotSize = 56;
+  const spacing = 8;
+  const totalWidth = HOTBAR_SLOTS * slotSize + (HOTBAR_SLOTS - 1) * spacing;
+  const startX = 1920 / 2 - totalWidth / 2;
+  const y = 1080 - 80;
+
+  for (let i = 0; i < HOTBAR_SLOTS; i++) {
+    let slot = game.scene.scenes[0].add.rectangle(
+      startX + i * (slotSize + spacing) + slotSize / 2,
+      y,
+      slotSize,
+      slotSize,
+      0x000000,
+      0.4
+    )
+      .setStrokeStyle(2, 0xffffff)
+      .setScrollFactor(0)
+      .setInteractive()
+      .setDepth(1000);
+
+    slot.on('pointerdown', () => selectHotbarSlot(i));
+    hotbarSlots.push(slot);
+  }
+
+  let axeIcon = game.scene.scenes[0].add.image(
+    hotbarSlots[0].x,
+    hotbarSlots[0].y,
+    'axe'
+  ).setScale(1.75).setScrollFactor(0).setDepth(1001);
+
+  hotbarIcons[0] = axeIcon;
+
+  updateHotbarSelection();
+}
+
+function selectHotbarSlot(index) {
+  selectedHotbarSlot = index;
+  updateHotbarSelection();
+}
+
+function updateHotbarSelection() {
+  hotbarSlots.forEach((s, i) => {
+    s.setStrokeStyle(2, i === selectedHotbarSlot ? 0xffff00 : 0xffffff);
+  });
+}
+
+function handleHotbarInput() {
+  if (keys.one.isDown) selectHotbarSlot(0);
+  if (keys.two.isDown) selectHotbarSlot(1);
+  if (keys.three.isDown) selectHotbarSlot(2);
+  if (keys.four.isDown) selectHotbarSlot(3);
+  if (keys.five.isDown) selectHotbarSlot(4);
+  if (keys.six.isDown) selectHotbarSlot(5);
+  if (keys.seven.isDown) selectHotbarSlot(6);
+  if (keys.eight.isDown) selectHotbarSlot(7);
+  if (keys.nine.isDown) selectHotbarSlot(8);
+}
+
+// ================= FARMING =================
+function farmSystem() {
+  if (!pointer.isDown) return;
+
+  if (treeTouchCount > 0) resourceWood += FARM_RATE * treeTouchCount;
+  if (rockTouchCount > 0) resourceStone += FARM_RATE * rockTouchCount;
+  if (ironTouchCount > 0) resourceIron += FARM_RATE * ironTouchCount;
+}
+
+// ================= MOVEMENT =================
+function handlePlayerMovement() {
+
+  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
+    player.setVelocityX(-200);
+    if (cursors.shift.isDown) player.setVelocityX(-300);
+  }
+  else if ((cursors.right.isDown && player.x <= xLimit) || (keys.right.isDown && player.x <= xLimit)) {
+    player.setVelocityX(200);
+    if (cursors.shift.isDown) player.setVelocityX(300);
+  }
+  else {
+    player.setVelocityX(0);
+  }
+
+  if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
+    player.setVelocityY(-200);
+    if (cursors.shift.isDown) player.setVelocityY(-300);
+  }
+  else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
+    player.setVelocityY(200);
+    if (cursors.shift.isDown) player.setVelocityY(300);
+  }
+  else {
+    player.setVelocityY(0);
+  }
+}
+
+function updatePlayerChunk() {
+  let cx = closestChunkBoundary(player.x);
+  let cy = closestChunkBoundary(player.y);
+  let changed = cx !== playerXChunk || cy !== playerYChunk;
+  playerXChunk = cx;
+  playerYChunk = cy;
+  return changed;
+}
+
+function mapTesselation() {
+  let iIndex = 0;
+  for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
+    let jIndex = 0;
+    for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
+      background[iIndex][jIndex].setPosition(playerXChunk + i, playerYChunk + j);
+      jIndex++;
     }
+    iIndex++;
+  }
+}
 
-    function update() { //this function runs every frame
-      //debugging shit for positioning
-      this.posx.text = 'positionx ' + player.x;
-      this.posy.text = 'positiony ' + player.y;
-
-      this.treeCount.text = 'Wood: ' + Math.trunc(resourceWood)
-      this.treeCount.setPosition(player.x-900,player.y-500)
-
-      this.rockCount.text = 'Stone: ' + Math.trunc(resourceStone)
-      this.rockCount.setPosition(player.x-900,player.y-525)
-
-      this.text.setPosition(player.x - 10, player.y - 10);
-
-      this.posx.setPosition(player.x - 10, player.y - 60);
-      this.posy.setPosition(player.x - 10, player.y - 30);
-
-      this.curx.setPosition(player.x - 10, player.y - 90);
-      this.cury.setPosition(player.x - 10, player.y - 120);
-
-      handlePlayerMovement()
-      farmSystem()
-      this.cameras.main.centerOn(player.x, player.y);
-
-      let playerChunkDidChange = updatePlayerChunk()
-      if(playerChunkDidChange) {
-        mapTesselation()
-      }
-    }
-
-    function farmSystem()
-    {
-      //checks if player is colliding with resource tree
-      if(rockCollision && treeCollision && pointer.isDown)
-      {
-        resourceStone+= 0.01
-        resourceWood += 0.01
-      }
-      else if(treeCollision && pointer.isDown)
-      {
-        resourceWood += 0.01
-      }
-      else if(rockCollision && pointer.isDown)
-      {
-        resourceStone += 0.01
-      }
-
-      
-      rockCollision = false;
-      treeCollision = false;
-    }
-
-
-    function handlePlayerMovement() {
-      //player movement
-      if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
-        player.setVelocityX(-200); //go left
-        if (cursors.shift.isDown) {
-          player.setVelocityX(-300);
-        }
-      }
-      else if ((cursors.right.isDown && player.x <= xLimit) || (keys.right.isDown && player.x <= xLimit)) {
-        player.setVelocityX(200); //go right
-        if (cursors.shift.isDown) {
-          player.setVelocityX(300);
-        }
-      }
-      else {
-        player.setVelocityX(0); //don't move left or right
-      }
-      if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
-        player.setVelocityY(-200); //move up
-        if (cursors.shift.isDown) {
-          player.setVelocityY(-300);
-        }
-
-      }
-      else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
-        player.setVelocityY(200); //move down
-        if (cursors.shift.isDown) {
-          player.setVelocityY(300);
-        }
-      }
-      else {
-        player.setVelocityY(0); //don't move up or down
-      }
-    }
-
-    // returns true if chunk has changed, false otherwise
-    function updatePlayerChunk() {
-      let chunkX = closestChunkBoundary(player.x)
-      let chunkY = closestChunkBoundary(player.y)
-
-      var result = false
-
-      if(chunkX != playerXChunk || chunkY != playerYChunk) {
-        result = true
-      }
-
-      playerXChunk = chunkX
-      playerYChunk = chunkY
-
-      return result
-    }
-    
-    function mapTesselation() {
-      var iIndex = 0
-      for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
-        var jIndex = 0
-        for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
-          background[iIndex][jIndex].setPosition(playerXChunk + i, playerYChunk + j)
-
-          jIndex++
-        }
-        iIndex++
-      }
-    }
-    
-
-  </script>
+</script>
 
 </body>
-
 </html>
