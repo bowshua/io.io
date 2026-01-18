@@ -356,7 +356,7 @@ function clearResourcesAroundWorkbench(tileX, tileY) {
 
 // ================= CREATE =================
 function create() {
-  this.physics.world.setBounds(0, 0, xLimit, yLimit);
+  this.physics.world.setBounds(0, 0, 4680, 4680);
   var playerp_ox = Phaser.Math.Between(0, 4680);
   var playerp_oy = Phaser.Math.Between(0, 4680);
 
@@ -460,7 +460,10 @@ dayNightOverlay.setDepth(999); // above world, below UI
 
   // Optional: zombie ↔ player collision
   this.physics.add.collider(player, zombies);
-
+  this.physics.add.collider(zombies, zombies);
+  this.physics.add.collider(zombies, iron);
+  this.physics.add.collider(zombies, rock);
+  this.physics.add.collider(zombies, tree);
   // ===== HUD =====
   this.treeCount = this.add.text(20, 20, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
   this.rockCount = this.add.text(20, 45, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
@@ -744,11 +747,16 @@ function trySpawnZombie() {
 
 
   const zombie = zombies.create(x, y, 'zombie');
-  zombie.setScale(2.5);
+  
 
   // ✅ SAME HITBOX AS PLAYER
-  zombie.body.setCircle(10,22,18);
+  const radius = 10;
+  const offsetX = zombie.body.width / 2 - radius;
+  const offsetY = zombie.body.height / 2 - radius;
 
+  zombie.body.setCircle(radius, offsetX-2, offsetY-2);
+
+  zombie.setScale(2.5);
   zombie.setCollideWorldBounds(true);
   zombie.speed = 60;
 
