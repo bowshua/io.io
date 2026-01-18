@@ -66,16 +66,27 @@ var treeTouchCount = 0;
 var rockTouchCount = 0;
 var ironTouchCount = 0;
 
+// ===== DAY / NIGHT =====
+var timeOfDay = 0;           // 0 → 1
+const DAY_LENGTH = 120;     // seconds for a full cycle
+var dayNightOverlay;
+
 // RESOURCES
-var resourceWood = 0;
-var resourceStone = 0;
-var resourceIron = 0;
+var resourceWood = 100;
+var resourceStone = 100;
+var resourceIron = 100;
 
 // FARM RATE PER OBJECT
 const FARM_RATE = 0.01;
 
 var yLimit;
 var xLimit;
+
+const BUILD_TILE_SIZE = 78;
+var buildPreview;
+const WORKBENCH_CLEAR_RADIUS_TILES = 15;
+
+var workbenches;
 
 const background_size = 468;
 const background_chunk_width = 8;
@@ -99,6 +110,8 @@ function preload() {
   this.load.image('rock', 'assets/rock.png');
   this.load.image('iron', 'assets/iron.png');
   this.load.image('axe', 'assets/axe.png');
+  this.load.image('playerworkbench', 'assets/playerworkbench.png');
+  this.load.image('workbench', 'assets/workbench.png');
 }
 
 // ================= HELPERS =================
@@ -112,6 +125,203 @@ function backgroundDifferenceBehind(count) {
 
 function backgroundDifferenceInFront(count) {
   return background_size * Math.floor(count / 2);
+}
+
+function snapToBuildTile(value) {
+  return Math.floor(value / BUILD_TILE_SIZE) * BUILD_TILE_SIZE;
+}
+
+function updateWorkbenchClaimOverlay() {
+
+  if (workbenches.countActive(true) === 0) {
+    workbenchClaimOverlay.setVisible(false);
+    return;
+  }
+
+  const bench = workbenches.getChildren()[0];
+
+  const tiles = WORKBENCH_CLEAR_RADIUS_TILES;
+  const half = Math.floor(tiles / 2);
+  const size = tiles * BUILD_TILE_SIZE;
+
+  // Snap bench to tile origin
+  const tileX = snapToBuildTile(bench.x - BUILD_TILE_SIZE / 2);
+  const tileY = snapToBuildTile(bench.y - BUILD_TILE_SIZE / 2);
+
+  // Top-left of 11x11 area
+  const x = tileX - half * BUILD_TILE_SIZE;
+  const y = tileY - half * BUILD_TILE_SIZE;
+
+  workbenchClaimOverlay.clear();
+
+  // ✅ Black perimeter outline only
+  workbenchClaimOverlay.lineStyle(3, 0x000000, 0.9);
+  workbenchClaimOverlay.strokeRect(x, y, size, size);
+
+  workbenchClaimOverlay.setVisible(true);
+}
+
+
+function handleBuildPreview() {
+
+  // Only when workbench selected
+  if (selectedHotbarSlot !== 1) {
+    buildPreview.setVisible(false);
+    return;
+  }
+
+  const tileX = snapToBuildTile(pointer.worldX);
+  const tileY = snapToBuildTile(pointer.worldY);
+
+  // World bounds check
+  const inBounds = isBuildTileInBounds(tileX, tileY);
+
+
+  const canAfford =
+    resourceWood >= 30 &&
+    resourceStone >= 30 &&
+    resourceIron >= 10;
+
+
+  const tileClear = isBuildTileClear(tileX, tileY);
+
+  const valid = canAfford && tileClear && inBounds;
+  
+  buildPreview.clear();
+  buildPreview.lineStyle(2, valid ? 0x00ff00 : 0xff0000, 0.9);
+  buildPreview.strokeRect(tileX, tileY, BUILD_TILE_SIZE, BUILD_TILE_SIZE);
+  buildPreview.setVisible(true);
+
+}
+
+function isBuildTileClear(x, y) {
+  const tileRect = new Phaser.Geom.Rectangle(
+    x,
+    y,
+    BUILD_TILE_SIZE,
+    BUILD_TILE_SIZE
+  );
+
+  let blocked = false;
+
+  tree.getChildren().forEach(obj => {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+      blocked = true;
+    }
+  });
+
+  rock.getChildren().forEach(obj => {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+      blocked = true;
+    }
+  });
+
+  iron.getChildren().forEach(obj => {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+      blocked = true;
+    }
+  });
+
+  workbenches.getChildren().forEach(obj => {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+      blocked = true;
+    }
+  });
+
+  return !blocked;
+}
+
+function isBuildTileInBounds(x, y) {
+  return (
+    x >= 0 &&
+    y >= 0 &&
+    x + BUILD_TILE_SIZE <= xLimit &&
+    y + BUILD_TILE_SIZE <= yLimit
+  );
+}
+
+function tryPlaceWorkbench() {
+
+  if (selectedHotbarSlot !== 1) return;
+  if (!pointer.justDown) return;
+
+  // ❌ Already have a workbench
+  if (workbenches.countActive(true) > 0) return;
+
+  const tileX = snapToBuildTile(pointer.worldX);
+  const tileY = snapToBuildTile(pointer.worldY);
+
+  if (!isBuildTileInBounds(tileX, tileY)) return;
+
+  if (
+    resourceWood < 30 ||
+    resourceStone < 30 ||
+    resourceIron < 10
+  ) return;
+
+  if (!isBuildTileClear(tileX, tileY)) return;
+
+  // Deduct resources
+  resourceWood -= 30;
+  resourceStone -= 30;
+  resourceIron -= 10;
+
+  // Place workbench
+  const bench = workbenches.create(
+    tileX + BUILD_TILE_SIZE / 2,
+    tileY + BUILD_TILE_SIZE / 2,
+    'workbench'
+  );
+
+  bench.setScale(1);
+
+  bench.body.setSize(
+  BUILD_TILE_SIZE,
+  BUILD_TILE_SIZE,
+  true
+);
+
+  bench.refreshBody();
+
+  // 🔥 CLEAR CLAIM AREA
+  clearResourcesAroundWorkbench(tileX, tileY);
+}
+
+function clearResourcesAroundWorkbench(tileX, tileY) {
+
+  const half = Math.floor(WORKBENCH_CLEAR_RADIUS_TILES / 2);
+  const size = WORKBENCH_CLEAR_RADIUS_TILES * BUILD_TILE_SIZE;
+
+  // Top-left of the clear area
+  const clearX = tileX - half * BUILD_TILE_SIZE;
+  const clearY = tileY - half * BUILD_TILE_SIZE;
+
+  const clearRect = new Phaser.Geom.Rectangle(
+    clearX,
+    clearY,
+    size,
+    size
+  );
+
+  // Helper to destroy intersecting objects
+  function clearGroup(group) {
+    group.getChildren().forEach(obj => {
+      if (Phaser.Geom.Intersects.RectangleToRectangle(
+        clearRect,
+        obj.getBounds()
+      )) {
+        obj.destroy();
+      }
+    });
+  }
+
+  clearGroup(tree);
+  clearGroup(rock);
+  clearGroup(iron);
+
+  clearGroup(tree);
+  clearGroup(rock);
+  clearGroup(iron);
 }
 
 // ================= CREATE =================
@@ -159,29 +369,31 @@ function create() {
 
   // ===== WORLD EDGE DARKENING OVERLAY =====
 
-  // Dark overlay (covers everything)
-  this.worldEdgeOverlay = this.add.graphics();
-  this.worldEdgeOverlay.fillStyle(0x000000, 0.35);
-  this.worldEdgeOverlay.fillRect(
-    -2000, -2000,
-    xLimit + 4000,
-    yLimit + 4000
-  );
+  // ===== WORLD EDGE DARKENING OVERLAY =====
 
-  // Mask shape (playable area hole)
-  this.worldEdgeMask = this.make.graphics({ x: 0, y: 0, add: false });
-  this.worldEdgeMask.fillStyle(0xffffff, 0);
-  this.worldEdgeMask.fillRect(0, 0, xLimit, yLimit);
+// Dark overlay (covers entire screen)
+this.worldEdgeOverlay = this.add.graphics();
+this.worldEdgeOverlay.fillStyle(0x000000, 0.35);
+this.worldEdgeOverlay.fillRect(-4000, -4000, 8000, 8000);
+this.worldEdgeOverlay.setScrollFactor(0);
 
-  // Apply mask
-  this.worldEdgeOverlay.setMask(
-  new Phaser.Display.Masks.GeometryMask(this, this.worldEdgeMask)
-  );
+// Mask shape (playable area hole)
+this.worldEdgeMask = this.make.graphics({ x: 0, y: 0, add: false });
+this.worldEdgeMask.fillStyle(0xffffff);
+this.worldEdgeMask.fillRect(0, 0, xLimit, yLimit);
 
-  // Depth: above grass, below player
-  this.worldEdgeOverlay.depth = -4;
+// Apply inverted mask
+const mask = new Phaser.Display.Masks.GeometryMask(this, this.worldEdgeMask);
+mask.invertAlpha = true;
+this.worldEdgeOverlay.setMask(mask);
 
-  
+// Depth
+this.worldEdgeOverlay.setDepth(-4);
+
+// ===== DAY / NIGHT OVERLAY =====
+dayNightOverlay = this.add.graphics();
+dayNightOverlay.setScrollFactor(0);
+dayNightOverlay.setDepth(999); // above world, below UI  
 
   // ===== RESOURCE GROUPS =====
   tree = this.physics.add.staticGroup();
@@ -200,6 +412,16 @@ function create() {
   this.physics.add.collider(player, tree, () => treeTouchCount++);
   this.physics.add.collider(player, rock, () => rockTouchCount++);
   this.physics.add.collider(player, iron, () => ironTouchCount++);
+
+
+  // ===== WORKBENCH GROUP =====
+  workbenches = this.physics.add.staticGroup();
+  this.physics.add.collider(player, workbenches);
+
+  // ===== WORKBENCH CLAIM OVERLAY =====
+  workbenchClaimOverlay = this.add.graphics();
+  workbenchClaimOverlay.setDepth(2); // above ground, below player
+  workbenchClaimOverlay.setVisible(false);
 
   // ===== HUD =====
   this.treeCount = this.add.text(20, 20, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
@@ -245,10 +467,15 @@ function create() {
 
   // ===== HOTBAR UI =====
   createHotbar.call(this);
+
+  // ===== BUILD TILE PREVIEW =====
+  buildPreview = this.add.graphics();
+  buildPreview.setDepth(10);
+  buildPreview.setVisible(false);
 }
 
 // ================= UPDATE =================
-function update() {
+function update(time,delta) {
 
   this.treeCount.text = 'Wood: ' + Math.trunc(resourceWood);
   this.rockCount.text = 'Stone: ' + Math.trunc(resourceStone);
@@ -273,9 +500,16 @@ function update() {
     mapTesselation();
   }
 
+  handleBuildPreview();
+  tryPlaceWorkbench();
+  updateWorkbenchClaimOverlay();
+
+  updateDayNight(delta);
+
   treeTouchCount = 0;
   rockTouchCount = 0;
   ironTouchCount = 0;
+
 }
 
 // ================= HOTBAR FUNCTIONS =================
@@ -312,8 +546,26 @@ function createHotbar() {
 
   hotbarIcons[0] = axeIcon;
 
+  // Slot 2 (Workbench)
+  let workbenchIcon = game.scene.scenes[0].add.image(
+    hotbarSlots[1].x,
+    hotbarSlots[1].y,
+    'workbench'
+  )
+  .setScale(1)
+  .setScrollFactor(0)
+  .setDepth(1001);
+
+  hotbarIcons[1] = workbenchIcon;
+
+
+
+
   updateHotbarSelection();
 }
+
+
+
 
 function selectHotbarSlot(index) {
   selectedHotbarSlot = index;
@@ -324,6 +576,15 @@ function updateHotbarSelection() {
   hotbarSlots.forEach((s, i) => {
     s.setStrokeStyle(2, i === selectedHotbarSlot ? 0xffff00 : 0xffffff);
   });
+
+  // Change player sprite based on selected slot
+  if (selectedHotbarSlot === 0) {
+    player.setTexture('player');
+  }
+  else if (selectedHotbarSlot === 1) {
+    player.setTexture('playerworkbench');
+  }
+
 }
 
 function handleHotbarInput() {
@@ -341,6 +602,7 @@ function handleHotbarInput() {
 // ================= FARMING =================
 function farmSystem() {
   if (!pointer.isDown) return;
+  if(selectedHotbarSlot != 0) return;
 
   if (treeTouchCount > 0) resourceWood += FARM_RATE * treeTouchCount;
   if (rockTouchCount > 0) resourceStone += FARM_RATE * rockTouchCount;
@@ -395,6 +657,28 @@ function mapTesselation() {
     iIndex++;
   }
 }
+
+function updateDayNight(delta) {
+
+  // Advance time
+  timeOfDay += delta / 1000 / DAY_LENGTH;
+  timeOfDay %= 1;
+
+  // Calculate darkness using cosine curve (smooth)
+  // Noon = 0 darkness, Midnight = max darkness
+  const darkness = Math.max(
+    0,
+    Math.cos((timeOfDay - 0.5) * Math.PI * 2)
+  );
+
+  // Tune night strength here
+  const alpha = Phaser.Math.Clamp(darkness * 0.6, 0, 0.6);
+
+  dayNightOverlay.clear();
+  dayNightOverlay.fillStyle(0x000000, alpha);
+  dayNightOverlay.fillRect(0, 0, 1920, 1080);
+}
+
 
 </script>
 
