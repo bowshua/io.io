@@ -68,7 +68,7 @@ var ironTouchCount = 0;
 
 // ===== DAY / NIGHT =====
 var timeOfDay = 0;           // 0 → 1
-const DAY_LENGTH = 120;     // seconds for a full cycle
+const DAY_LENGTH = 1;     // seconds for a full cycle
 var dayNightOverlay;
 
 // RESOURCES
@@ -93,6 +93,16 @@ const background_chunk_width = 8;
 const background_chunk_height = 5;
 var background = [];
 
+// ===== DAY / NIGHT =====
+var timeOfDay = 0;        // 0 → 1
+
+// ===== ZOMBIES =====
+var zombies;
+var zombieSpawnedThisNight = false;
+
+const ZOMBIE_SPAWN_DISTANCE_TILES = 20;
+
+
 var playerXChunk = undefined;
 var playerYChunk = undefined;
 
@@ -112,6 +122,7 @@ function preload() {
   this.load.image('axe', 'assets/axe.png');
   this.load.image('playerworkbench', 'assets/playerworkbench.png');
   this.load.image('workbench', 'assets/workbench.png');
+  this.load.image('zombie', 'assets/zombie.png');
 }
 
 // ================= HELPERS =================
@@ -129,6 +140,30 @@ function backgroundDifferenceInFront(count) {
 
 function snapToBuildTile(value) {
   return Math.floor(value / BUILD_TILE_SIZE) * BUILD_TILE_SIZE;
+}
+
+function isNight() {
+  return timeOfDay > 0.45 && timeOfDay < 0.55;
+}
+
+function getZombieSpawnPosition() {
+
+  const bench = workbenches.getChildren()[0];
+  if (!bench) return null;
+
+  const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
+
+  // Random angle around workbench
+  const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+
+  let x = bench.x + Math.cos(angle) * distance;
+  let y = bench.y + Math.sin(angle) * distance;
+
+  // Clamp inside world bounds
+  x = Phaser.Math.Clamp(x, 0, xLimit);
+  y = Phaser.Math.Clamp(y, 0, yLimit);
+
+  return { x, y };
 }
 
 function updateWorkbenchClaimOverlay() {
@@ -275,12 +310,7 @@ function tryPlaceWorkbench() {
 
   bench.setScale(1);
 
-  bench.body.setSize(
-  BUILD_TILE_SIZE,
-  BUILD_TILE_SIZE,
-  true
-);
-
+  bench.body.setSize(48, 48, true);
   bench.refreshBody();
 
   // 🔥 CLEAR CLAIM AREA
@@ -326,7 +356,7 @@ function clearResourcesAroundWorkbench(tileX, tileY) {
 
 // ================= CREATE =================
 function create() {
-
+  this.physics.world.setBounds(0, 0, xLimit, yLimit);
   var playerp_ox = Phaser.Math.Between(0, 4680);
   var playerp_oy = Phaser.Math.Between(0, 4680);
 
@@ -356,6 +386,8 @@ function create() {
   player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
   player.setScale(3);
   player.setCircle(16, 15, 15);
+
+
 
   pointer = this.input.activePointer;
   cursors = this.input.keyboard.createCursorKeys();
@@ -422,6 +454,12 @@ dayNightOverlay.setDepth(999); // above world, below UI
   workbenchClaimOverlay = this.add.graphics();
   workbenchClaimOverlay.setDepth(2); // above ground, below player
   workbenchClaimOverlay.setVisible(false);
+
+  // ===== ZOMBIE GROUP =====
+  zombies = this.physics.add.group();
+
+  // Optional: zombie ↔ player collision
+  this.physics.add.collider(player, zombies);
 
   // ===== HUD =====
   this.treeCount = this.add.text(20, 20, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
@@ -505,6 +543,8 @@ function update(time,delta) {
   updateWorkbenchClaimOverlay();
 
   updateDayNight(delta);
+  trySpawnZombie();
+  updateZombies();
 
   treeTouchCount = 0;
   rockTouchCount = 0;
@@ -679,6 +719,67 @@ function updateDayNight(delta) {
   dayNightOverlay.fillRect(0, 0, 1920, 1080);
 }
 
+function trySpawnZombie() {
+
+  // Reset flag when day
+  if (!isNight()) {
+    zombieSpawnedThisNight = false;
+    return;
+  }
+
+  // Must have a workbench
+  if (workbenches.countActive(true) === 0) return;
+
+  // Only once per night
+  if (zombieSpawnedThisNight) return;
+
+  const bench = workbenches.getChildren()[0];
+  if (!bench) return;
+
+  const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
+  const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+
+  let x = bench.x + Math.cos(angle) * distance;
+  let y = bench.y + Math.sin(angle) * distance;
+
+
+  const zombie = zombies.create(x, y, 'zombie');
+  zombie.setScale(2.5);
+
+  // ✅ SAME HITBOX AS PLAYER
+  zombie.body.setCircle(10,22,18);
+
+  zombie.setCollideWorldBounds(true);
+  zombie.speed = 60;
+
+  zombieSpawnedThisNight = true;
+
+  console.log("🧟 Zombie spawned at night!");
+}
+
+function updateZombies() {
+
+  if (workbenches.countActive(true) === 0) return;
+
+  const bench = workbenches.getChildren()[0];
+
+  zombies.getChildren().forEach(zombie => {
+
+    const angle = Phaser.Math.Angle.Between(
+      zombie.x,
+      zombie.y,
+      bench.x,
+      bench.y
+    );
+
+    zombie.setRotation(angle);
+
+    zombie.setVelocity(
+      Math.cos(angle) * zombie.speed,
+      Math.sin(angle) * zombie.speed
+    );
+  });
+}
 
 </script>
 
