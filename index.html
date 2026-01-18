@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html>
 
+<html>
 <head>
   <meta charset="utf-8">
   <title>Phaser Fullscreen Game</title>
@@ -12,7 +12,6 @@
       overflow: hidden;
       background: black;
     }
-
     #game-container {
       width: 1920px;
       height: 1080px;
@@ -20,33 +19,29 @@
     }
   </style>
 </head>
-
 <body>
-
 <div id="game-container"></div>
-
 <script>
-
 var config = {
-  type: Phaser.Canvas,
-  roundPixels: true,
-  width: 1920,
-  height: 1080,
-  parent: 'game-container',
-  physics: {
-    default: 'arcade',
-    arcade: {
-      fixedStep: false,
-      debug: true,
-      debugShowBody: true,
-      fps: 360
+    type: Phaser.Canvas,
+    roundPixels: true,
+    width: 1920,
+    height: 1080,
+    parent: 'game-container',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            fixedStep: false,
+            debug: true,
+            debugShowBody: true,
+            fps: 360
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
     }
-  },
-  scene: {
-    preload: preload,
-    create: create,
-    update: update
-  }
 };
 
 var game = new Phaser.Game(config);
@@ -56,7 +51,6 @@ var player;
 var tree;
 var rock;
 var iron;
-
 var cursors;
 var keys;
 var pointer;
@@ -67,42 +61,42 @@ var rockTouchCount = 0;
 var ironTouchCount = 0;
 
 // ===== DAY / NIGHT =====
-var timeOfDay = 0;           // 0 → 1
-const DAY_LENGTH = 1;     // seconds for a full cycle
+var timeOfDay = 0;   // 0 → 1
+const DAY_LENGTH = 1; // seconds for a full cycle
 var dayNightOverlay;
 
 // RESOURCES
 var resourceWood = 100;
 var resourceStone = 100;
 var resourceIron = 100;
+var resourceGold = 0;
 
 // FARM RATE PER OBJECT
 const FARM_RATE = 0.01;
 
 var yLimit;
 var xLimit;
-
 const BUILD_TILE_SIZE = 78;
 var buildPreview;
-const WORKBENCH_CLEAR_RADIUS_TILES = 15;
-
+const WORKBENCH_CLEAR_RADIUS_TILES = 11; // ✅ CHANGED: 11x11 radius as requested
 var workbenches;
+var goldmines;
+
+// Goldmine constants
+const GOLDMINE_GOLD_RATE = 1;
+const GOLDMINE_TICK_INTERVAL = 2000;
+const GOLDMINE_MAX_HEALTH = 150;
+const GOLDMINE_HEALTH_BAR_OFFSET_Y = -40;
 
 const background_size = 468;
 const background_chunk_width = 8;
 const background_chunk_height = 5;
 var background = [];
 
-// ===== DAY / NIGHT =====
-var timeOfDay = 0;        // 0 → 1
-
 // ===== ZOMBIES =====
 var zombies;
 var zombieSpawnedThisNight = false;
-
 const ZOMBIE_SPAWN_DISTANCE_TILES = 20;
-
-
 var playerXChunk = undefined;
 var playerYChunk = undefined;
 
@@ -112,684 +106,1464 @@ var hotbarSlots = [];
 var hotbarIcons = [];
 var selectedHotbarSlot = 0;
 
+// ================= HEALTH BAR CONSTANTS =================
+const HEALTH_BAR_WIDTH = 50;
+const HEALTH_BAR_HEIGHT = 6;
+const PLAYER_HEALTH_BAR_OFFSET_Y = -55;
+const ZOMBIE_HEALTH_BAR_OFFSET_Y = -35;
+const WORKBENCH_HEALTH_BAR_OFFSET_Y = -40;
+
+// ================= HEALTH VALUES =================
+const PLAYER_MAX_HEALTH = 100;
+const WORKBENCH_MAX_HEALTH = 200;
+const ZOMBIE_MAX_HEALTH = 50;
+
+// ================= UI ELEMENTS =================
+var resourcePanel = {};
+var fullscreenBtn = {};
+
+// ================= SWING ANIMATION =================
+var swingAnimationTime = 0;
+const SWING_SPEED = 10;
+const SWING_AMPLITUDE = 35;
+var basePlayerAngle = 0;
+
+// ================= ZOMBIE SWING ANIMATION =================
+const ZOMBIE_SWING_SPEED = 25;
+const ZOMBIE_SWING_AMPLITUDE = 30;
+const ZOMBIE_SWING_DURATION = 250;
+
+// ================= DAMAGE COOLDOWN =================
+const DAMAGE_COOLDOWN = 500; // ms between damage ticks per zombie
+
+var crossbowTurrets; // Crossbow turret group
+var crossbowBolts; // Crossbow bolt projectile group
+
+// Crossbow Bolt constants
+const CROSSBOW_BOLT_SPEED = 500; // pixels per second
+const CROSSBOW_BOLT_MAX_DISTANCE = 900; // destroy bolt after traveling this far
+const CROSSBOW_TURRET_ANGLE_OFFSET = Math.PI / 2; // Adjust this if sprite faces wrong direction (-90 degrees)
+
+// Crossbow Turret constants
+const CROSSBOW_TURRET_RANGE = 780; // 10 tiles * 78 pixels
+const CROSSBOW_TURRET_MAX_HEALTH = 100;
+const CROSSBOW_TURRET_HEALTH_BAR_OFFSET_Y = -40;
+const CROSSBOW_TURRET_ANIMATION_SPEED = 150; // ms per frame
+const CROSSBOW_TURRET_DAMAGE = 15;
+const CROSSBOW_TURRET_FIRE_RATE = 500; // ms between shots
+
+const CROSSBOW_BOLT_KNOCKBACK = 150; // knockback force applied to zombie
+const CROSSBOW_BOLT_KNOCKBACK_DURATION = 200; // ms of knockback effect
+
 // ================= PRELOAD =================
 function preload() {
-  this.load.image('floor', 'assets/therealtile.png');
-  this.load.image('player', 'assets/playerwithaxe.png');
-  this.load.image('tree', 'assets/tree.png');
-  this.load.image('rock', 'assets/rock.png');
-  this.load.image('iron', 'assets/iron.png');
-  this.load.image('axe', 'assets/axe.png');
-  this.load.image('playerworkbench', 'assets/playerworkbench.png');
-  this.load.image('workbench', 'assets/workbench.png');
-  this.load.image('zombie', 'assets/zombie.png');
+    this.load.image('floor', 'assets/therealtile.png');
+    this.load.image('player', 'assets/playerwithaxe.png');
+    this.load.image('tree', 'assets/tree.png');
+    this.load.image('rock', 'assets/rock.png');
+    this.load.image('iron', 'assets/iron.png');
+    this.load.image('axe', 'assets/axe.png');
+    this.load.image('playerworkbench', 'assets/playerworkbench.png');
+    this.load.image('workbench', 'assets/workbench.png');
+    this.load.image('zombie', 'assets/zombie.png');
+    this.load.image('goldmine', 'assets/goldmine.png');
+    this.load.image('gold', 'assets/gold.png');
+    this.load.image('crossbowturret1', 'assets/crossbowturret1.png');
+    this.load.image('crossbowturret2', 'assets/crossbowturret2.png');
+    this.load.image('crossbowturret3', 'assets/crossbowturret3.png');
+    this.load.image('crossbowbolt', 'assets/crossbowbolt.png');
 }
 
 // ================= HELPERS =================
 function closestChunkBoundary(position) {
-  return Math.floor(position / background_size) * background_size;
+    return Math.floor(position / background_size) * background_size;
 }
 
 function backgroundDifferenceBehind(count) {
-  return background_size * Math.ceil(count / -2);
+    return background_size * Math.ceil(count / -2);
 }
 
 function backgroundDifferenceInFront(count) {
-  return background_size * Math.floor(count / 2);
+    return background_size * Math.floor(count / 2);
 }
 
 function snapToBuildTile(value) {
-  return Math.floor(value / BUILD_TILE_SIZE) * BUILD_TILE_SIZE;
+    return Math.floor(value / BUILD_TILE_SIZE) * BUILD_TILE_SIZE;
 }
 
 function isNight() {
-  return timeOfDay > 0.45 && timeOfDay < 0.55;
+    return timeOfDay > 0.45 && timeOfDay < 0.55;
 }
 
+// Calculate where to aim to hit a moving target
+function calculateLeadAngle(shooterX, shooterY, targetX, targetY, targetVelX, targetVelY, projectileSpeed) {
+    // Distance to target
+    const dx = targetX - shooterX;
+    const dy = targetY - shooterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Time for projectile to reach current target position
+    const timeToTarget = distance / projectileSpeed;
+    
+    // Predict where target will be
+    const predictedX = targetX + (targetVelX * timeToTarget);
+    const predictedY = targetY + (targetVelY * timeToTarget);
+    
+    // Calculate angle to predicted position
+    return Phaser.Math.Angle.Between(shooterX, shooterY, predictedX, predictedY);
+}
+
+
+
 function getZombieSpawnPosition() {
+    const bench = workbenches.getChildren()[0];
+    if (!bench) return null;
 
-  const bench = workbenches.getChildren()[0];
-  if (!bench) return null;
+    const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
 
-  const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
+    let x = bench.x + Math.cos(angle) * distance;
+    let y = bench.y + Math.sin(angle) * distance;
 
-  // Random angle around workbench
-  const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    x = Phaser.Math.Clamp(x, 0, xLimit);
+    y = Phaser.Math.Clamp(y, 0, yLimit);
 
-  let x = bench.x + Math.cos(angle) * distance;
-  let y = bench.y + Math.sin(angle) * distance;
+    return { x, y };
+}
 
-  // Clamp inside world bounds
-  x = Phaser.Math.Clamp(x, 0, xLimit);
-  y = Phaser.Math.Clamp(y, 0, yLimit);
+function getWorkbenchClaimBounds() {
+    if (workbenches.countActive(true) === 0) return null;
 
-  return { x, y };
+    const bench = workbenches.getChildren()[0];
+    const tiles = WORKBENCH_CLEAR_RADIUS_TILES;
+    const half = Math.floor(tiles / 2);
+    const size = tiles * BUILD_TILE_SIZE;
+
+    const tileX = snapToBuildTile(bench.x - BUILD_TILE_SIZE / 2);
+    const tileY = snapToBuildTile(bench.y - BUILD_TILE_SIZE / 2);
+
+    return {
+        x: tileX - half * BUILD_TILE_SIZE,
+        y: tileY - half * BUILD_TILE_SIZE,
+        width: size,
+        height: size
+    };
+}
+
+// ✅ NEW: Get claim bounds for a specific workbench (used during destruction)
+function getWorkbenchClaimBoundsFor(bench) {
+    const tiles = WORKBENCH_CLEAR_RADIUS_TILES;
+    const half = Math.floor(tiles / 2);
+    const size = tiles * BUILD_TILE_SIZE;
+
+    const tileX = snapToBuildTile(bench.x - BUILD_TILE_SIZE / 2);
+    const tileY = snapToBuildTile(bench.y - BUILD_TILE_SIZE / 2);
+
+    return {
+        x: tileX - half * BUILD_TILE_SIZE,
+        y: tileY - half * BUILD_TILE_SIZE,
+        width: size,
+        height: size
+    };
+}
+
+function isTileInWorkbenchArea(tileX, tileY) {
+    const bounds = getWorkbenchClaimBounds();
+    if (!bounds) return false;
+
+    return (
+        tileX >= bounds.x &&
+        tileY >= bounds.y &&
+        tileX + BUILD_TILE_SIZE <= bounds.x + bounds.width &&
+        tileY + BUILD_TILE_SIZE <= bounds.y + bounds.height
+    );
 }
 
 function updateWorkbenchClaimOverlay() {
+    if (workbenches.countActive(true) === 0) {
+        workbenchClaimOverlay.setVisible(false);
+        return;
+    }
 
-  if (workbenches.countActive(true) === 0) {
-    workbenchClaimOverlay.setVisible(false);
-    return;
-  }
+    const bounds = getWorkbenchClaimBounds();
+    if (!bounds) return;
 
-  const bench = workbenches.getChildren()[0];
-
-  const tiles = WORKBENCH_CLEAR_RADIUS_TILES;
-  const half = Math.floor(tiles / 2);
-  const size = tiles * BUILD_TILE_SIZE;
-
-  // Snap bench to tile origin
-  const tileX = snapToBuildTile(bench.x - BUILD_TILE_SIZE / 2);
-  const tileY = snapToBuildTile(bench.y - BUILD_TILE_SIZE / 2);
-
-  // Top-left of 11x11 area
-  const x = tileX - half * BUILD_TILE_SIZE;
-  const y = tileY - half * BUILD_TILE_SIZE;
-
-  workbenchClaimOverlay.clear();
-
-  // ✅ Black perimeter outline only
-  workbenchClaimOverlay.lineStyle(3, 0x000000, 0.9);
-  workbenchClaimOverlay.strokeRect(x, y, size, size);
-
-  workbenchClaimOverlay.setVisible(true);
+    workbenchClaimOverlay.clear();
+    workbenchClaimOverlay.lineStyle(3, 0x000000, 0.9);
+    workbenchClaimOverlay.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    workbenchClaimOverlay.setVisible(true);
 }
 
+function getCursorWorldPosition() {
+    const camera = game.scene.scenes[0].cameras.main;
+    return {
+        x: pointer.x + camera.scrollX,
+        y: pointer.y + camera.scrollY
+    };
+}
 
 function handleBuildPreview() {
+    if (selectedHotbarSlot !== 1 && selectedHotbarSlot !== 2 && selectedHotbarSlot !== 3) {
+        buildPreview.setVisible(false);
+        return;
+    }
 
-  // Only when workbench selected
-  if (selectedHotbarSlot !== 1) {
-    buildPreview.setVisible(false);
-    return;
-  }
+    const cursor = getCursorWorldPosition();
+    const tileX = snapToBuildTile(cursor.x);
+    const tileY = snapToBuildTile(cursor.y);
 
-  const tileX = snapToBuildTile(pointer.worldX);
-  const tileY = snapToBuildTile(pointer.worldY);
+    const inBounds = isBuildTileInBounds(tileX, tileY);
+    const tileClear = isBuildTileClear(tileX, tileY);
 
-  // World bounds check
-  const inBounds = isBuildTileInBounds(tileX, tileY);
+    let canAfford = false;
+    let valid = false;
 
+    if (selectedHotbarSlot === 1) {
+        canAfford = resourceWood >= 30 && resourceStone >= 30 && resourceIron >= 10;
+        valid = canAfford && tileClear && inBounds && workbenches.countActive(true) === 0;
+    } else if (selectedHotbarSlot === 2) {
+        canAfford = resourceWood >= 30 && resourceStone >= 30 && resourceIron >= 30;
+        const inWorkbenchArea = isTileInWorkbenchArea(tileX, tileY);
+        valid = canAfford && tileClear && inBounds && inWorkbenchArea;
+    } else if (selectedHotbarSlot === 3) {
+        // Crossbow turret - 50 wood, 50 stone, 50 iron
+        canAfford = resourceWood >= 50 && resourceStone >= 50 && resourceIron >= 50;
+        const inWorkbenchArea = isTileInWorkbenchArea(tileX, tileY);
+        valid = canAfford && tileClear && inBounds && inWorkbenchArea;
+    }
 
-  const canAfford =
-    resourceWood >= 30 &&
-    resourceStone >= 30 &&
-    resourceIron >= 10;
-
-
-  const tileClear = isBuildTileClear(tileX, tileY);
-
-  const valid = canAfford && tileClear && inBounds;
-  
-  buildPreview.clear();
-  buildPreview.lineStyle(2, valid ? 0x00ff00 : 0xff0000, 0.9);
-  buildPreview.strokeRect(tileX, tileY, BUILD_TILE_SIZE, BUILD_TILE_SIZE);
-  buildPreview.setVisible(true);
-
+    buildPreview.clear();
+    buildPreview.lineStyle(2, valid ? 0x00ff00 : 0xff0000, 0.9);
+    buildPreview.strokeRect(tileX, tileY, BUILD_TILE_SIZE, BUILD_TILE_SIZE);
+    buildPreview.setVisible(true);
 }
 
 function isBuildTileClear(x, y) {
-  const tileRect = new Phaser.Geom.Rectangle(
-    x,
-    y,
-    BUILD_TILE_SIZE,
-    BUILD_TILE_SIZE
-  );
+    const tileRect = new Phaser.Geom.Rectangle(x, y, BUILD_TILE_SIZE, BUILD_TILE_SIZE);
+    let blocked = false;
 
-  let blocked = false;
+    tree.getChildren().forEach(obj => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+            blocked = true;
+        }
+    });
 
-  tree.getChildren().forEach(obj => {
+    rock.getChildren().forEach(obj => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+            blocked = true;
+        }
+    });
+
+    iron.getChildren().forEach(obj => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+            blocked = true;
+        }
+    });
+
+    workbenches.getChildren().forEach(obj => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+            blocked = true;
+        }
+    });
+
+    goldmines.getChildren().forEach(obj => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
+            blocked = true;
+        }
+    });
+
+    crossbowTurrets.getChildren().forEach(obj => {
     if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
-      blocked = true;
-    }
-  });
+        blocked = true;
+      }
+    });
 
-  rock.getChildren().forEach(obj => {
-    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
-      blocked = true;
-    }
-  });
-
-  iron.getChildren().forEach(obj => {
-    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
-      blocked = true;
-    }
-  });
-
-  workbenches.getChildren().forEach(obj => {
-    if (Phaser.Geom.Intersects.RectangleToRectangle(tileRect, obj.getBounds())) {
-      blocked = true;
-    }
-  });
-
-  return !blocked;
+    return !blocked;
 }
 
+function tryPlaceCrossbowTurret() {
+    if (selectedHotbarSlot !== 3) return;
+    if (!pointer.justDown) return;
+    if (workbenches.countActive(true) === 0) return;
+
+    const cursor = getCursorWorldPosition();
+    const tileX = snapToBuildTile(cursor.x);
+    const tileY = snapToBuildTile(cursor.y);
+
+    if (!isBuildTileInBounds(tileX, tileY)) return;
+    if (!isTileInWorkbenchArea(tileX, tileY)) return;
+    
+    // Cost: 50 wood, 50 stone, 50 iron
+    if (resourceWood < 50 || resourceStone < 50 || resourceIron < 50) return;
+    if (!isBuildTileClear(tileX, tileY)) return;
+
+    resourceWood -= 50;
+    resourceStone -= 50;
+    resourceIron -= 50;
+
+    const turret = crossbowTurrets.create(
+        tileX + BUILD_TILE_SIZE / 2,
+        tileY + BUILD_TILE_SIZE / 2,
+        'crossbowturret1'
+    );
+    turret.setScale(1.4);
+    turret.body.setSize(68, 68, true);
+
+    // Initialize turret properties
+    turret.currentFrame = 1;
+    turret.lastFrameChange = Date.now();
+    turret.lastFireTime = 0;
+    turret.targetZombie = null;
+    turret.isAnimating = false;
+    turret.animationStartTime = 0;      // NEW
+    turret.hasFiredThisCycle = false;   // NEW
+    turret.firingAngle = 0;             // NEW
+
+    createHealthBar(game.scene.scenes[0], turret, CROSSBOW_TURRET_MAX_HEALTH, CROSSBOW_TURRET_HEALTH_BAR_OFFSET_Y);
+    console.log("🏹 Crossbow Turret placed!");
+}
+
+function updateCrossbowTurrets() {
+    const now = Date.now();
+    
+    crossbowTurrets.getChildren().forEach(turret => {
+        if (!turret.active) return;
+        
+        // Find closest zombie in range
+        let closestZombie = null;
+        let closestDistance = CROSSBOW_TURRET_RANGE;
+        
+        zombies.getChildren().forEach(zombie => {
+            if (!zombie.active) return;
+            
+            const distance = Phaser.Math.Distance.Between(
+                turret.x, turret.y,
+                zombie.x, zombie.y
+            );
+            
+            if (distance <= CROSSBOW_TURRET_RANGE && distance < closestDistance) {
+                closestDistance = distance;
+                closestZombie = zombie;
+            }
+        });
+        
+        turret.targetZombie = closestZombie;
+        
+        if (closestZombie) {
+            // Get zombie velocity for prediction
+            const zombieVelX = closestZombie.body.velocity.x;
+            const zombieVelY = closestZombie.body.velocity.y;
+            
+            // Calculate lead angle (where to aim to hit moving target)
+            const leadAngle = calculateLeadAngle(
+                turret.x, turret.y,
+                closestZombie.x, closestZombie.y,
+                zombieVelX, zombieVelY,
+                CROSSBOW_BOLT_SPEED
+            );
+            
+            // Apply angle offset to correct sprite orientation
+            turret.setRotation(leadAngle + CROSSBOW_TURRET_ANGLE_OFFSET);
+            
+            // Check if we can fire (respects fire rate)
+            const canFire = now - turret.lastFireTime >= CROSSBOW_TURRET_FIRE_RATE;
+            
+            if (canFire && !turret.isAnimating) {
+                // Start firing animation sequence
+                turret.isAnimating = true;
+                turret.animationStartTime = now;
+                turret.currentFrame = 1;
+                turret.setTexture('crossbowturret1');
+                turret.hasFiredThisCycle = false;
+                
+                // Store the lead angle at start of animation for firing
+                turret.firingAngle = leadAngle;
+                
+                // Also store target reference and its velocity for re-calculation at fire time
+                turret.firingTargetVelX = zombieVelX;
+                turret.firingTargetVelY = zombieVelY;
+            }
+            
+            // Handle animation sequence
+            if (turret.isAnimating) {
+                const animElapsed = now - turret.animationStartTime;
+                
+                if (animElapsed < CROSSBOW_TURRET_ANIMATION_SPEED) {
+                    // Frame 1
+                    if (turret.currentFrame !== 1) {
+                        turret.currentFrame = 1;
+                        turret.setTexture('crossbowturret1');
+                    }
+                } else if (animElapsed < CROSSBOW_TURRET_ANIMATION_SPEED * 2) {
+                    // Frame 2
+                    if (turret.currentFrame !== 2) {
+                        turret.currentFrame = 2;
+                        turret.setTexture('crossbowturret2');
+                    }
+                } else if (animElapsed < CROSSBOW_TURRET_ANIMATION_SPEED * 3) {
+                    // Frame 3 - Fire the bolt!
+                    if (turret.currentFrame !== 3) {
+                        turret.currentFrame = 3;
+                        turret.setTexture('crossbowturret3');
+                        
+                        // Fire bolt exactly when frame 3 starts
+                        if (!turret.hasFiredThisCycle && closestZombie && closestZombie.active) {
+                            // Recalculate lead angle at fire time for accuracy
+                            const fireLeadAngle = calculateLeadAngle(
+                                turret.x, turret.y,
+                                closestZombie.x, closestZombie.y,
+                                closestZombie.body.velocity.x, 
+                                closestZombie.body.velocity.y,
+                                CROSSBOW_BOLT_SPEED
+                            );
+                            
+                            fireCrossbowBolt(turret, closestZombie, fireLeadAngle);
+                            turret.lastFireTime = now;
+                            turret.hasFiredThisCycle = true;
+                        }
+                    }
+                } else {
+                    // Animation complete - reset
+                    turret.isAnimating = false;
+                    turret.currentFrame = 1;
+                    turret.setTexture('crossbowturret1');
+                }
+            }
+        } else {
+            // No target - reset to idle
+            if (turret.isAnimating || turret.currentFrame !== 1) {
+                turret.isAnimating = false;
+                turret.currentFrame = 1;
+                turret.setTexture('crossbowturret1');
+            }
+        }
+    });
+}
+
+
+function fireCrossbowBolt(turret, targetZombie, angle) {
+    const scene = game.scene.scenes[0];
+    
+    // Create bolt at turret position
+    const bolt = crossbowBolts.create(turret.x, turret.y, 'crossbowbolt');
+    
+    // Store starting position to track distance traveled
+    bolt.startX = turret.x;
+    bolt.startY = turret.y;
+    bolt.damage = CROSSBOW_TURRET_DAMAGE;
+    
+    // Set bolt rotation to face direction of travel
+    // Apply same offset as turret if the bolt sprite also needs it
+    bolt.setRotation(angle + CROSSBOW_TURRET_ANGLE_OFFSET);
+    
+    // Set velocity toward target
+    bolt.setVelocity(
+        Math.cos(angle) * CROSSBOW_BOLT_SPEED,
+        Math.sin(angle) * CROSSBOW_BOLT_SPEED
+    );
+    
+    // Make the bolt body smaller for more precise hits
+    bolt.body.setSize(10, 10, true);
+    bolt.setScale(3);
+    
+    console.log("🏹 Bolt fired!");
+}
+
+function updateCrossbowBolts() {
+    crossbowBolts.getChildren().forEach(bolt => {
+        if (!bolt.active) return;
+        
+        // Calculate distance traveled
+        const distanceTraveled = Phaser.Math.Distance.Between(
+            bolt.startX, bolt.startY,
+            bolt.x, bolt.y
+        );
+        
+        // Destroy bolt if it traveled too far (missed)
+        if (distanceTraveled > CROSSBOW_BOLT_MAX_DISTANCE) {
+            bolt.destroy();
+            console.log("🏹 Bolt missed (out of range)");
+        }
+    });
+}
+
+function onBoltHitZombie(bolt, zombie) {
+    if (!bolt.active || !zombie.active) return;
+    
+    // Calculate knockback direction (from bolt's travel direction)
+    const knockbackAngle = Math.atan2(bolt.body.velocity.y, bolt.body.velocity.x);
+    
+    // Store knockback velocity and start time
+    zombie.knockbackVelX = Math.cos(knockbackAngle) * CROSSBOW_BOLT_KNOCKBACK;
+    zombie.knockbackVelY = Math.sin(knockbackAngle) * CROSSBOW_BOLT_KNOCKBACK;
+    zombie.knockbackTime = Date.now();
+    
+    // Apply immediate knockback
+    zombie.setVelocity(zombie.knockbackVelX, zombie.knockbackVelY);
+    
+    // Deal damage to zombie
+    damageEntity(zombie, bolt.damage);
+    
+    // Destroy the bolt
+    bolt.destroy();
+    
+    console.log("🏹 Bolt hit zombie! Zombie health:", zombie.health);
+}
+
+
 function isBuildTileInBounds(x, y) {
-  return (
-    x >= 0 &&
-    y >= 0 &&
-    x + BUILD_TILE_SIZE <= xLimit &&
-    y + BUILD_TILE_SIZE <= yLimit
-  );
+    return (
+        x >= 0 &&
+        y >= 0 &&
+        x + BUILD_TILE_SIZE <= xLimit &&
+        y + BUILD_TILE_SIZE <= yLimit
+    );
 }
 
 function tryPlaceWorkbench() {
+    if (selectedHotbarSlot !== 1) return;
+    if (!pointer.justDown) return;
+    if (workbenches.countActive(true) > 0) return;
 
-  if (selectedHotbarSlot !== 1) return;
-  if (!pointer.justDown) return;
+    const cursor = getCursorWorldPosition();
+    const tileX = snapToBuildTile(cursor.x);
+    const tileY = snapToBuildTile(cursor.y);
 
-  // ❌ Already have a workbench
-  if (workbenches.countActive(true) > 0) return;
+    if (!isBuildTileInBounds(tileX, tileY)) return;
+    if (resourceWood < 30 || resourceStone < 30 || resourceIron < 10) return;
+    if (!isBuildTileClear(tileX, tileY)) return;
 
-  const tileX = snapToBuildTile(pointer.worldX);
-  const tileY = snapToBuildTile(pointer.worldY);
+    resourceWood -= 30;
+    resourceStone -= 30;
+    resourceIron -= 10;
 
-  if (!isBuildTileInBounds(tileX, tileY)) return;
+    const bench = workbenches.create(
+        tileX + BUILD_TILE_SIZE / 2,
+        tileY + BUILD_TILE_SIZE / 2,
+        'workbench'
+    );
+    bench.setScale(1);
+    bench.body.setSize(48, 48, true);
+    bench.refreshBody();
 
-  if (
-    resourceWood < 30 ||
-    resourceStone < 30 ||
-    resourceIron < 10
-  ) return;
+    createHealthBar(game.scene.scenes[0], bench, WORKBENCH_MAX_HEALTH, WORKBENCH_HEALTH_BAR_OFFSET_Y);
+    clearResourcesAroundWorkbench(tileX, tileY);
+}
 
-  if (!isBuildTileClear(tileX, tileY)) return;
+function tryPlaceGoldmine() {
+    if (selectedHotbarSlot !== 2) return;
+    if (!pointer.justDown) return;
+    if (workbenches.countActive(true) === 0) return;
 
-  // Deduct resources
-  resourceWood -= 30;
-  resourceStone -= 30;
-  resourceIron -= 10;
+    const cursor = getCursorWorldPosition();
+    const tileX = snapToBuildTile(cursor.x);
+    const tileY = snapToBuildTile(cursor.y);
 
-  // Place workbench
-  const bench = workbenches.create(
-    tileX + BUILD_TILE_SIZE / 2,
-    tileY + BUILD_TILE_SIZE / 2,
-    'workbench'
-  );
+    if (!isBuildTileInBounds(tileX, tileY)) return;
+    if (!isTileInWorkbenchArea(tileX, tileY)) return;
+    if (resourceWood < 30 || resourceStone < 30 || resourceIron < 30) return;
+    if (!isBuildTileClear(tileX, tileY)) return;
 
-  bench.setScale(1);
+    resourceWood -= 30;
+    resourceStone -= 30;
+    resourceIron -= 30;
 
-  bench.body.setSize(48, 48, true);
-  bench.refreshBody();
+    const mine = goldmines.create(
+        tileX + BUILD_TILE_SIZE / 2,
+        tileY + BUILD_TILE_SIZE / 2,
+        'goldmine'
+    );
+    mine.setScale(1);
+    mine.body.setSize(48, 48, true);
+    mine.refreshBody();
+    mine.lastGoldTick = Date.now();
 
-  // 🔥 CLEAR CLAIM AREA
-  clearResourcesAroundWorkbench(tileX, tileY);
+    createHealthBar(game.scene.scenes[0], mine, GOLDMINE_MAX_HEALTH, GOLDMINE_HEALTH_BAR_OFFSET_Y);
+    console.log("⛏️ Goldmine placed!");
+}
+
+function updateGoldmines() {
+    const now = Date.now();
+    goldmines.getChildren().forEach(mine => {
+        if (!mine.active) return;
+        if (now - mine.lastGoldTick >= GOLDMINE_TICK_INTERVAL) {
+            resourceGold += GOLDMINE_GOLD_RATE;
+            mine.lastGoldTick = now;
+            console.log("💰 Gold mined! Total:", Math.trunc(resourceGold));
+        }
+    });
 }
 
 function clearResourcesAroundWorkbench(tileX, tileY) {
+    const half = Math.floor(WORKBENCH_CLEAR_RADIUS_TILES / 2);
+    const size = WORKBENCH_CLEAR_RADIUS_TILES * BUILD_TILE_SIZE;
 
-  const half = Math.floor(WORKBENCH_CLEAR_RADIUS_TILES / 2);
-  const size = WORKBENCH_CLEAR_RADIUS_TILES * BUILD_TILE_SIZE;
+    const clearX = tileX - half * BUILD_TILE_SIZE;
+    const clearY = tileY - half * BUILD_TILE_SIZE;
 
-  // Top-left of the clear area
-  const clearX = tileX - half * BUILD_TILE_SIZE;
-  const clearY = tileY - half * BUILD_TILE_SIZE;
+    const clearRect = new Phaser.Geom.Rectangle(clearX, clearY, size, size);
 
-  const clearRect = new Phaser.Geom.Rectangle(
-    clearX,
-    clearY,
-    size,
-    size
-  );
+    function clearGroup(group) {
+        group.getChildren().forEach(obj => {
+            if (Phaser.Geom.Intersects.RectangleToRectangle(clearRect, obj.getBounds())) {
+                obj.destroy();
+            }
+        });
+    }
 
-  // Helper to destroy intersecting objects
-  function clearGroup(group) {
-    group.getChildren().forEach(obj => {
-      if (Phaser.Geom.Intersects.RectangleToRectangle(
-        clearRect,
-        obj.getBounds()
-      )) {
-        obj.destroy();
-      }
+    clearGroup(tree);
+    clearGroup(rock);
+    clearGroup(iron);
+}
+
+// ✅ NEW: Destroy all buildings within workbench claim area when workbench is destroyed
+function destroyBuildingsInClaimArea(bench) {
+    const bounds = getWorkbenchClaimBoundsFor(bench);
+    
+    const clearRect = new Phaser.Geom.Rectangle(
+        bounds.x, bounds.y, bounds.width, bounds.height
+    );
+
+    // Destroy all goldmines in the area
+    goldmines.getChildren().slice().forEach(mine => {
+        if (Phaser.Geom.Intersects.RectangleToRectangle(clearRect, mine.getBounds())) {
+            destroyHealthBar(mine);
+            mine.destroy();
+            console.log("⛏️ Goldmine destroyed (workbench lost)!");
+        }
     });
-  }
+    
+    // Add other building types here in the future
+    // Destroy all crossbow turrets in the area
+crossbowTurrets.getChildren().slice().forEach(turret => {
+    if (Phaser.Geom.Intersects.RectangleToRectangle(clearRect, turret.getBounds())) {
+        destroyHealthBar(turret);
+        turret.destroy();
+        console.log("🏹 Crossbow Turret destroyed (workbench lost)!");
+    }
+});
+    
+}
 
-  clearGroup(tree);
-  clearGroup(rock);
-  clearGroup(iron);
+// ================= HEALTH BAR FUNCTIONS =================
+function createHealthBar(scene, entity, maxHealth, offsetY) {
+    entity.maxHealth = maxHealth;
+    entity.health = maxHealth;
+    entity.healthBarOffsetY = offsetY;
 
-  clearGroup(tree);
-  clearGroup(rock);
-  clearGroup(iron);
+    entity.healthBarBg = scene.add.graphics();
+    entity.healthBarBg.setDepth(100);
+
+    entity.healthBarFill = scene.add.graphics();
+    entity.healthBarFill.setDepth(101);
+}
+
+function updateHealthBar(entity) {
+    if (!entity || !entity.healthBarBg || !entity.healthBarFill) return;
+
+    if (!entity.active && entity !== player) {
+        entity.healthBarBg.destroy();
+        entity.healthBarFill.destroy();
+        return;
+    }
+
+    const x = entity.x - HEALTH_BAR_WIDTH / 2;
+    const y = entity.y + entity.healthBarOffsetY;
+
+    entity.healthBarBg.clear();
+    entity.healthBarFill.clear();
+
+    entity.healthBarBg.fillStyle(0x000000, 0.8);
+    entity.healthBarBg.fillRect(x - 2, y - 2, HEALTH_BAR_WIDTH + 4, HEALTH_BAR_HEIGHT + 4);
+
+    entity.healthBarBg.fillStyle(0x4a0000, 1);
+    entity.healthBarBg.fillRect(x, y, HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT);
+
+    const healthPercent = Phaser.Math.Clamp(entity.health / entity.maxHealth, 0, 1);
+    const fillWidth = HEALTH_BAR_WIDTH * healthPercent;
+
+    let color;
+    if (healthPercent > 0.6) {
+        color = 0x00ff00;
+    } else if (healthPercent > 0.3) {
+        color = 0xffff00;
+    } else {
+        color = 0xff0000;
+    }
+
+    entity.healthBarFill.fillStyle(color, 1);
+    entity.healthBarFill.fillRect(x, y, fillWidth, HEALTH_BAR_HEIGHT);
+
+    entity.healthBarBg.lineStyle(1, 0xffffff, 0.5);
+    entity.healthBarBg.strokeRect(x - 1, y - 1, HEALTH_BAR_WIDTH + 2, HEALTH_BAR_HEIGHT + 2);
+}
+
+function updateAllHealthBars() {
+    updateHealthBar(player);
+
+    workbenches.getChildren().forEach(bench => {
+        if (bench.active) {
+            updateHealthBar(bench);
+        }
+    });
+
+    goldmines.getChildren().forEach(mine => {
+        if (mine.active) {
+            updateHealthBar(mine);
+        }
+    });
+
+    zombies.getChildren().forEach(zombie => {
+        if (zombie.active) {
+            updateHealthBar(zombie);
+        }
+    });
+
+    // Update crossbow turret health bars
+crossbowTurrets.getChildren().forEach(turret => {
+    if (turret.active) {
+        updateHealthBar(turret);
+    }
+});
+
+
+}
+
+function destroyHealthBar(entity) {
+    if (entity.healthBarBg) {
+        entity.healthBarBg.destroy();
+        entity.healthBarBg = null;
+    }
+    if (entity.healthBarFill) {
+        entity.healthBarFill.destroy();
+        entity.healthBarFill = null;
+    }
+}
+
+// ================= DAMAGE FUNCTIONS =================
+function damageEntity(entity, amount) {
+    if (!entity || entity.health === undefined) return;
+
+    entity.health -= amount;
+
+    if (entity.health <= 0) {
+        entity.health = 0;
+        handleEntityDeath(entity);
+    }
+}
+
+function handleEntityDeath(entity) {
+    destroyHealthBar(entity);
+
+    if (entity === player) {
+        console.log("💀 Player died!");
+    } else if (zombies.contains(entity)) {
+        console.log("🧟 Zombie killed!");
+        entity.destroy();
+    } else if (workbenches.contains(entity)) {
+        console.log("🔨 Workbench destroyed!");
+        // ✅ NEW: Destroy all buildings in the claim area before destroying workbench
+        destroyBuildingsInClaimArea(entity);
+        entity.destroy();
+    } else if (goldmines.contains(entity)) {
+        console.log("⛏️ Goldmine destroyed!");
+        entity.destroy();
+    }
+    else if (crossbowTurrets.contains(entity)) {
+    console.log("🏹 Crossbow Turret destroyed!");
+    entity.destroy();
+}
+}
+
+// ================= UI FUNCTIONS =================
+function createResourcePanel(scene) {
+    const panelX = 15;
+    const panelY = 15;
+    const panelWidth = 200;
+    const panelHeight = 170;
+    const cornerRadius = 12;
+
+    resourcePanel.container = scene.add.container(0, 0);
+    resourcePanel.container.setScrollFactor(0);
+    resourcePanel.container.setDepth(1001);
+
+    resourcePanel.bg = scene.add.graphics();
+    resourcePanel.bg.setScrollFactor(0);
+
+    resourcePanel.bg.fillStyle(0x1a1a2e, 0.85);
+    resourcePanel.bg.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, cornerRadius);
+
+    resourcePanel.bg.lineStyle(2, 0x4a4a6a, 1);
+    resourcePanel.bg.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, cornerRadius);
+
+    resourcePanel.bg.lineStyle(1, 0x6a6a8a, 0.3);
+    resourcePanel.bg.strokeRoundedRect(panelX + 3, panelY + 3, panelWidth - 6, panelHeight - 6, cornerRadius - 2);
+
+    resourcePanel.container.add(resourcePanel.bg);
+
+    resourcePanel.title = scene.add.text(panelX + panelWidth / 2, panelY + 18, '⚒ RESOURCES', {
+        font: 'bold 14px Arial',
+        fill: '#8888aa',
+        align: 'center'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    resourcePanel.container.add(resourcePanel.title);
+
+    resourcePanel.divider = scene.add.graphics();
+    resourcePanel.divider.lineStyle(1, 0x4a4a6a, 0.8);
+    resourcePanel.divider.lineBetween(panelX + 15, panelY + 32, panelX + panelWidth - 15, panelY + 32);
+    resourcePanel.divider.setScrollFactor(0);
+    resourcePanel.container.add(resourcePanel.divider);
+
+    const rowStartY = panelY + 48;
+    const rowHeight = 30;
+    const iconX = panelX + 25;
+    const textX = panelX + 55;
+    const valueX = panelX + panelWidth - 20;
+
+    // Wood row
+    resourcePanel.woodIcon = scene.add.image(iconX, rowStartY, 'tree').setScale(0.8).setScrollFactor(0);
+    resourcePanel.woodLabel = scene.add.text(textX, rowStartY, 'Wood', { font: '14px Arial', fill: '#7ec850' }).setOrigin(0, 0.5).setScrollFactor(0);
+    resourcePanel.woodValue = scene.add.text(valueX, rowStartY, '0', { font: 'bold 16px Arial', fill: '#a8e063' }).setOrigin(1, 0.5).setScrollFactor(0);
+    resourcePanel.container.add([resourcePanel.woodIcon, resourcePanel.woodLabel, resourcePanel.woodValue]);
+
+    // Stone row
+    resourcePanel.stoneIcon = scene.add.image(iconX, rowStartY + rowHeight, 'rock').setScale(0.8).setScrollFactor(0);
+    resourcePanel.stoneLabel = scene.add.text(textX, rowStartY + rowHeight, 'Stone', { font: '14px Arial', fill: '#a0a0a0' }).setOrigin(0, 0.5).setScrollFactor(0);
+    resourcePanel.stoneValue = scene.add.text(valueX, rowStartY + rowHeight, '0', { font: 'bold 16px Arial', fill: '#c8c8c8' }).setOrigin(1, 0.5).setScrollFactor(0);
+    resourcePanel.container.add([resourcePanel.stoneIcon, resourcePanel.stoneLabel, resourcePanel.stoneValue]);
+
+    // Iron row
+    resourcePanel.ironIcon = scene.add.image(iconX, rowStartY + rowHeight * 2, 'iron').setScale(0.8).setScrollFactor(0);
+    resourcePanel.ironLabel = scene.add.text(textX, rowStartY + rowHeight * 2, 'Iron', { font: '14px Arial', fill: '#6eb5d9' }).setOrigin(0, 0.5).setScrollFactor(0);
+    resourcePanel.ironValue = scene.add.text(valueX, rowStartY + rowHeight * 2, '0', { font: 'bold 16px Arial', fill: '#87ceeb' }).setOrigin(1, 0.5).setScrollFactor(0);
+    resourcePanel.container.add([resourcePanel.ironIcon, resourcePanel.ironLabel, resourcePanel.ironValue]);
+
+    // Gold row
+    resourcePanel.goldIcon = scene.add.image(iconX, rowStartY + rowHeight * 3, 'gold').setScale(2).setScrollFactor(0);
+    resourcePanel.goldLabel = scene.add.text(textX, rowStartY + rowHeight * 3, 'Gold', { font: '14px Arial', fill: '#d4af37' }).setOrigin(0, 0.5).setScrollFactor(0);
+    resourcePanel.goldValue = scene.add.text(valueX, rowStartY + rowHeight * 3, '0', { font: 'bold 16px Arial', fill: '#ffd700' }).setOrigin(1, 0.5).setScrollFactor(0);
+    resourcePanel.container.add([resourcePanel.goldIcon, resourcePanel.goldLabel, resourcePanel.goldValue]);
+}
+
+function updateResourcePanel() {
+    if (!resourcePanel.woodValue) return;
+
+    resourcePanel.woodValue.setText(Math.trunc(resourceWood).toString());
+    resourcePanel.stoneValue.setText(Math.trunc(resourceStone).toString());
+    resourcePanel.ironValue.setText(Math.trunc(resourceIron).toString());
+    resourcePanel.goldValue.setText(Math.trunc(resourceGold).toString());
+}
+
+function createFullscreenButton(scene) {
+    const btnX = 1905;
+    const btnY = 15;
+    const btnWidth = 160;
+    const btnHeight = 44;
+    const cornerRadius = 8;
+
+    fullscreenBtn.container = scene.add.container(0, 0);
+    fullscreenBtn.container.setScrollFactor(0);
+    fullscreenBtn.container.setDepth(1001);
+
+    fullscreenBtn.bg = scene.add.graphics();
+    fullscreenBtn.bg.setScrollFactor(0);
+
+    drawFullscreenButtonState(false);
+
+    fullscreenBtn.container.add(fullscreenBtn.bg);
+
+    fullscreenBtn.icon = scene.add.text(btnX - btnWidth + 20, btnY + btnHeight / 2, '⛶', {
+        font: '20px Arial',
+        fill: '#ffffff'
+    }).setOrigin(0, 0.5).setScrollFactor(0);
+    fullscreenBtn.container.add(fullscreenBtn.icon);
+
+    fullscreenBtn.text = scene.add.text(btnX - btnWidth / 2 + 5, btnY + btnHeight / 2, 'FULLSCREEN', {
+        font: 'bold 13px Arial',
+        fill: '#ffffff'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    fullscreenBtn.container.add(fullscreenBtn.text);
+
+    fullscreenBtn.hitArea = scene.add.rectangle(
+        btnX - btnWidth / 2,
+        btnY + btnHeight / 2,
+        btnWidth,
+        btnHeight,
+        0xffffff, 0
+    ).setScrollFactor(0).setInteractive({ useHandCursor: true });
+
+    fullscreenBtn.hitArea.on('pointerover', () => {
+        drawFullscreenButtonState(true);
+        fullscreenBtn.text.setStyle({ fill: '#ffffff' });
+    });
+
+    fullscreenBtn.hitArea.on('pointerout', () => {
+        drawFullscreenButtonState(false);
+        fullscreenBtn.text.setStyle({ fill: '#ffffff' });
+    });
+
+    fullscreenBtn.hitArea.on('pointerdown', () => {
+        fullscreenBtn.bg.clear();
+        const x = btnX - btnWidth;
+        const y = btnY;
+        fullscreenBtn.bg.fillStyle(0x1a5a1a, 0.95);
+        fullscreenBtn.bg.fillRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+        fullscreenBtn.bg.lineStyle(2, 0x2a8a2a, 1);
+        fullscreenBtn.bg.strokeRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+    });
+
+    fullscreenBtn.hitArea.on('pointerup', () => {
+        if (!scene.scale.isFullscreen) {
+            scene.scale.startFullscreen();
+        } else {
+            scene.scale.stopFullscreen();
+        }
+        drawFullscreenButtonState(false);
+    });
+
+    scene.scale.on('enterfullscreen', () => {
+        fullscreenBtn.text.setText('EXIT FULLSCREEN');
+        fullscreenBtn.icon.setText('⛶');
+    });
+
+    scene.scale.on('leavefullscreen', () => {
+        fullscreenBtn.text.setText('FULLSCREEN');
+        fullscreenBtn.icon.setText('⛶');
+    });
+
+    function drawFullscreenButtonState(isHovered) {
+        fullscreenBtn.bg.clear();
+        const x = btnX - btnWidth;
+        const y = btnY;
+
+        if (isHovered) {
+            fullscreenBtn.bg.fillStyle(0x2d7a2d, 0.95);
+            fullscreenBtn.bg.fillRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+            fullscreenBtn.bg.lineStyle(3, 0x4ade4a, 0.6);
+            fullscreenBtn.bg.strokeRoundedRect(x - 1, y - 1, btnWidth + 2, btnHeight + 2, cornerRadius + 1);
+            fullscreenBtn.bg.lineStyle(2, 0x3a9a3a, 1);
+            fullscreenBtn.bg.strokeRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+        } else {
+            fullscreenBtn.bg.fillStyle(0x1e5a1e, 0.9);
+            fullscreenBtn.bg.fillRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+            fullscreenBtn.bg.lineStyle(2, 0x2a7a2a, 1);
+            fullscreenBtn.bg.strokeRoundedRect(x, y, btnWidth, btnHeight, cornerRadius);
+            fullscreenBtn.bg.lineStyle(1, 0x3a8a3a, 0.3);
+            fullscreenBtn.bg.strokeRoundedRect(x + 2, y + 2, btnWidth - 4, btnHeight - 4, cornerRadius - 1);
+        }
+    }
+}
+
+// ================= SWING ANIMATION FUNCTION =================
+function updateSwingAnimation(delta) {
+    const cursor = getCursorWorldPosition();
+
+    basePlayerAngle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, cursor.x, cursor.y);
+
+    const shouldSwing = selectedHotbarSlot === 0 && pointer.isDown;
+
+    if (shouldSwing) {
+        swingAnimationTime += delta / 1000 * SWING_SPEED * Math.PI * 2;
+        const swingOffset = Math.sin(swingAnimationTime) * SWING_AMPLITUDE;
+        player.setAngle(basePlayerAngle + swingOffset);
+    } else {
+        swingAnimationTime = 0;
+        player.setAngle(basePlayerAngle);
+    }
 }
 
 // ================= CREATE =================
 function create() {
-  this.physics.world.setBounds(0, 0, 4680, 4680);
-  var playerp_ox = Phaser.Math.Between(0, 4680);
-  var playerp_oy = Phaser.Math.Between(0, 4680);
+    this.physics.world.setBounds(0, 0, 4680, 4680);
 
-  playerXChunk = closestChunkBoundary(playerp_ox);
-  playerYChunk = closestChunkBoundary(playerp_oy);
+    var playerp_ox = Phaser.Math.Between(0, 4680);
+    var playerp_oy = Phaser.Math.Between(0, 4680);
+    playerXChunk = closestChunkBoundary(playerp_ox);
+    playerYChunk = closestChunkBoundary(playerp_oy);
+    xLimit = 4680;
+    yLimit = 4680;
 
-  xLimit = 4680;
-  yLimit = 4680;
-
-  // ===== BACKGROUND =====
-  for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
-    var xArray = [];
-    for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
-      var image = this.add.image(
-        closestChunkBoundary(playerp_ox + i),
-        closestChunkBoundary(playerp_oy + j),
-        'floor'
-      );
-      image.setScale(3);
-      image.depth = -5;
-      xArray.push(image);
+    // Background
+    for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
+        var xArray = [];
+        for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
+            var image = this.add.image(
+                closestChunkBoundary(playerp_ox + i),
+                closestChunkBoundary(playerp_oy + j),
+                'floor'
+            );
+            image.setScale(3);
+            image.depth = -5;
+            xArray.push(image);
+        }
+        background.push(xArray);
     }
-    background.push(xArray);
-  }
 
-  // ===== PLAYER =====
-  player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
-  player.setScale(3);
-  player.setCircle(16, 15, 15);
+    // Player
+    player = this.physics.add.sprite(playerp_ox, playerp_oy, 'player');
+    player.setScale(3);
+    player.setCircle(16, 15, 15);
+
+    createHealthBar(this, player, PLAYER_MAX_HEALTH, PLAYER_HEALTH_BAR_OFFSET_Y);
+
+    pointer = this.input.activePointer;
+    cursors = this.input.keyboard.createCursorKeys();
+    keys = this.input.keyboard.addKeys({
+        up: 'W', left: 'A', down: 'S', right: 'D',
+        one: 'ONE', two: 'TWO', three: 'THREE', four: 'FOUR',
+        five: 'FIVE', six: 'SIX', seven: 'SEVEN', eight: 'EIGHT', nine: 'NINE'
+    });
+
+    this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
+
+    // World edge overlay
+    this.worldEdgeOverlay = this.add.graphics();
+    this.worldEdgeOverlay.fillStyle(0x000000, 0.35);
+    this.worldEdgeOverlay.fillRect(-4000, -4000, 8000, 8000);
+    this.worldEdgeOverlay.setScrollFactor(0);
+
+    this.worldEdgeMask = this.make.graphics({ x: 0, y: 0, add: false });
+    this.worldEdgeMask.fillStyle(0xffffff);
+    this.worldEdgeMask.fillRect(0, 0, xLimit, yLimit);
+
+    const mask = new Phaser.Display.Masks.GeometryMask(this, this.worldEdgeMask);
+    mask.invertAlpha = true;
+    this.worldEdgeOverlay.setMask(mask);
+    this.worldEdgeOverlay.setDepth(-4);
+
+    // Day/Night overlay
+    dayNightOverlay = this.add.graphics();
+    dayNightOverlay.setScrollFactor(0);
+    dayNightOverlay.setDepth(999);
+
+    // Resource groups
+    tree = this.physics.add.staticGroup();
+    rock = this.physics.add.staticGroup();
+    iron = this.physics.add.staticGroup();
+
+    for (let i = 0; i < 20; i++) {
+        let tx = Phaser.Math.Between(0, 4680);
+        let ty = Phaser.Math.Between(0, 4680);
+        tree.create(tx, ty, 'tree').setScale(3);
+        rock.create(tx + Phaser.Math.Between(60, 300), ty + Phaser.Math.Between(60, 300), 'rock').setScale(3);
+        iron.create(tx + Phaser.Math.Between(120, 450), ty + Phaser.Math.Between(120, 450), 'iron').setScale(3);
+    }
+
+    this.physics.add.collider(player, tree, () => treeTouchCount++);
+    this.physics.add.collider(player, rock, () => rockTouchCount++);
+    this.physics.add.collider(player, iron, () => ironTouchCount++);
+
+    // Workbench group
+    workbenches = this.physics.add.staticGroup();
+    this.physics.add.collider(player, workbenches);
+
+    // Goldmine group
+    goldmines = this.physics.add.staticGroup();
+    this.physics.add.collider(player, goldmines);
+
+      // Crossbow turret group
+    crossbowTurrets = this.physics.add.staticGroup();
+    this.physics.add.collider(player, crossbowTurrets);
+
+    // Crossbow bolt group
+    crossbowBolts = this.physics.add.group();
 
 
 
-  pointer = this.input.activePointer;
-  cursors = this.input.keyboard.createCursorKeys();
-  keys = this.input.keyboard.addKeys({
-    up: 'W', left: 'A', down: 'S', right: 'D',
-    one: 'ONE', two: 'TWO', three: 'THREE', four: 'FOUR',
-    five: 'FIVE', six: 'SIX', seven: 'SEVEN', eight: 'EIGHT', nine: 'NINE'
-  });
+    // Workbench claim overlay
+    workbenchClaimOverlay = this.add.graphics();
+    workbenchClaimOverlay.setDepth(2);
+    workbenchClaimOverlay.setVisible(false);
 
-  this.cameras.main.setBounds(-955, -520, xLimit + 1920, yLimit + 1080);
+    // Zombie group
+    zombies = this.physics.add.group();
 
-  // ===== WORLD EDGE DARKENING OVERLAY =====
+    
 
-  // ===== WORLD EDGE DARKENING OVERLAY =====
+    // ✅ UPDATED: Zombie collision callbacks now pass both objects correctly
+    this.physics.add.collider(player, zombies, onZombieHitPlayer);
+    this.physics.add.collider(workbenches, zombies, onZombieHitWorkbench);
+    this.physics.add.collider(goldmines, zombies, onZombieHitGoldmine);
+    this.physics.add.collider(zombies, zombies);
+    this.physics.add.collider(zombies, iron);
+    this.physics.add.collider(zombies, rock);
+    this.physics.add.collider(zombies, tree);
+    this.physics.add.collider(zombies, goldmines);
+    this.physics.add.collider(crossbowTurrets, zombies, onZombieHitCrossbowTurret);
+    this.physics.add.collider(zombies, crossbowTurrets);
+    this.physics.add.overlap(crossbowBolts, zombies, onBoltHitZombie);
 
-// Dark overlay (covers entire screen)
-this.worldEdgeOverlay = this.add.graphics();
-this.worldEdgeOverlay.fillStyle(0x000000, 0.35);
-this.worldEdgeOverlay.fillRect(-4000, -4000, 8000, 8000);
-this.worldEdgeOverlay.setScrollFactor(0);
+    // UI
+    createResourcePanel(this);
+    createFullscreenButton(this);
 
-// Mask shape (playable area hole)
-this.worldEdgeMask = this.make.graphics({ x: 0, y: 0, add: false });
-this.worldEdgeMask.fillStyle(0xffffff);
-this.worldEdgeMask.fillRect(0, 0, xLimit, yLimit);
+    // Diagnostic text
+    this.angleText = this.add.text(player.x, player.y, '');
+    this.posx = this.add.text(player.x, player.y, '');
+    this.posy = this.add.text(player.x, player.y, '');
+    this.curx = this.add.text(player.x, player.y, '');
+    this.cury = this.add.text(player.x, player.y, '');
 
-// Apply inverted mask
-const mask = new Phaser.Display.Masks.GeometryMask(this, this.worldEdgeMask);
-mask.invertAlpha = true;
-this.worldEdgeOverlay.setMask(mask);
+    this.input.on('pointermove', function (pointer) {
+        const cursor = getCursorWorldPosition();
+        var angle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, cursor.x, cursor.y);
+        this.angleText.text = 'angle: ' + angle.toFixed(2);
+        this.curx.text = 'pcurx ' + cursor.x.toFixed(1);
+        this.cury.text = 'pcury ' + cursor.y.toFixed(1);
+    }, this);
 
-// Depth
-this.worldEdgeOverlay.setDepth(-4);
+    // Hotbar
+    createHotbar.call(this);
 
-// ===== DAY / NIGHT OVERLAY =====
-dayNightOverlay = this.add.graphics();
-dayNightOverlay.setScrollFactor(0);
-dayNightOverlay.setDepth(999); // above world, below UI  
+    // Build preview
+    buildPreview = this.add.graphics();
+    buildPreview.setDepth(10);
+    buildPreview.setVisible(false);
+}
 
-  // ===== RESOURCE GROUPS =====
-  tree = this.physics.add.staticGroup();
-  rock = this.physics.add.staticGroup();
-  iron = this.physics.add.staticGroup();
-
-  for (let i = 0; i < 20; i++) {
-    let tx = Phaser.Math.Between(0, 4680);
-    let ty = Phaser.Math.Between(0, 4680);
-
-    tree.create(tx, ty, 'tree').setScale(3);
-    rock.create(tx + Phaser.Math.Between(60, 300), ty + Phaser.Math.Between(60, 300), 'rock').setScale(3);
-    iron.create(tx + Phaser.Math.Between(120, 450), ty + Phaser.Math.Between(120, 450), 'iron').setScale(3);
-  }
-
-  this.physics.add.collider(player, tree, () => treeTouchCount++);
-  this.physics.add.collider(player, rock, () => rockTouchCount++);
-  this.physics.add.collider(player, iron, () => ironTouchCount++);
+// ================= COLLISION HANDLERS =================
+// ✅ UPDATED: Each zombie now tracks its own damage cooldowns
+function onZombieHitCrossbowTurret(turret, zombie) {
+    const now = Date.now();
+    
+    if (!zombie.lastTurretDamage) zombie.lastTurretDamage = 0;
+    
+    if (now - zombie.lastTurretDamage > DAMAGE_COOLDOWN) {
+        damageEntity(turret, 10);
+        zombie.lastTurretDamage = now;
+        triggerZombieSwing(zombie);
+        console.log("🏹 Crossbow Turret hit by zombie! Health:", turret.health);
+    }
+}
 
 
-  // ===== WORKBENCH GROUP =====
-  workbenches = this.physics.add.staticGroup();
-  this.physics.add.collider(player, workbenches);
 
-  // ===== WORKBENCH CLAIM OVERLAY =====
-  workbenchClaimOverlay = this.add.graphics();
-  workbenchClaimOverlay.setDepth(2); // above ground, below player
-  workbenchClaimOverlay.setVisible(false);
 
-  // ===== ZOMBIE GROUP =====
-  zombies = this.physics.add.group();
+function onZombieHitPlayer(playerObj, zombie) {
+    const now = Date.now();
+    
+    // Initialize per-zombie cooldown tracking
+    if (!zombie.lastPlayerDamage) zombie.lastPlayerDamage = 0;
+    
+    if (now - zombie.lastPlayerDamage > DAMAGE_COOLDOWN) {
+        damageEntity(player, 10);
+        zombie.lastPlayerDamage = now;
+        triggerZombieSwing(zombie);
+        console.log("🩸 Player hit by zombie! Health:", player.health);
+    }
+}
 
-  // Optional: zombie ↔ player collision
-  this.physics.add.collider(player, zombies);
-  this.physics.add.collider(zombies, zombies);
-  this.physics.add.collider(zombies, iron);
-  this.physics.add.collider(zombies, rock);
-  this.physics.add.collider(zombies, tree);
-  // ===== HUD =====
-  this.treeCount = this.add.text(20, 20, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
-  this.rockCount = this.add.text(20, 45, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
-  this.ironCount = this.add.text(20, 70, '', { font: '18px Arial', fill: '#ffffff' }).setScrollFactor(0);
+function onZombieHitWorkbench(workbench, zombie) {
+    const now = Date.now();
+    
+    // Initialize per-zombie cooldown tracking
+    if (!zombie.lastWorkbenchDamage) zombie.lastWorkbenchDamage = 0;
+    
+    if (now - zombie.lastWorkbenchDamage > DAMAGE_COOLDOWN) {
+        damageEntity(workbench, 15);
+        zombie.lastWorkbenchDamage = now;
+        triggerZombieSwing(zombie);
+        console.log("🔨 Workbench hit by zombie! Health:", workbench.health);
+    }
+}
 
-  // ===== DIAGNOSTIC TEXT (RESTORED) =====
-  this.angleText = this.add.text(player.x, player.y, '');
-  this.posx = this.add.text(player.x, player.y, '');
-  this.posy = this.add.text(player.x, player.y, '');
-  this.curx = this.add.text(player.x, player.y, '');
-  this.cury = this.add.text(player.x, player.y, '');
-
-  this.input.on('pointermove', function (pointer) {
-    var angle = Phaser.Math.RAD_TO_DEG *
-      Phaser.Math.Angle.Between(player.x, player.y, pointer.worldX, pointer.worldY);
-
-    player.setAngle(angle);
-    this.angleText.text = 'angle: ' + angle.toFixed(2);
-    this.curx.text = 'pcurx ' + pointer.worldX.toFixed(1);
-    this.cury.text = 'pcury ' + pointer.worldY.toFixed(1);
-  }, this);
-
-  // ===== FULLSCREEN BUTTON =====
-  this.fullscreenButton = this.add.text(1900, 20, '[ FULLSCREEN ]', {
-    font: '16px Arial',
-    fill: '#ffffff',
-    backgroundColor: '#000000',
-    padding: { x: 6, y: 4 }
-  })
-    .setOrigin(1, 0)
-    .setScrollFactor(0)
-    .setInteractive({ useHandCursor: true })
-    .setDepth(1000);
-
-  this.fullscreenButton.on('pointerup', () => {
-    if (!this.scale.isFullscreen) this.scale.startFullscreen();
-    else this.scale.stopFullscreen();
-  });
-
-  this.scale.on('enterfullscreen', () => this.fullscreenButton.setText('[ EXIT FULLSCREEN ]'));
-  this.scale.on('leavefullscreen', () => this.fullscreenButton.setText('[ FULLSCREEN ]'));
-
-  // ===== HOTBAR UI =====
-  createHotbar.call(this);
-
-  // ===== BUILD TILE PREVIEW =====
-  buildPreview = this.add.graphics();
-  buildPreview.setDepth(10);
-  buildPreview.setVisible(false);
+function onZombieHitGoldmine(goldmine, zombie) {
+    const now = Date.now();
+    
+    // Initialize per-zombie cooldown tracking
+    if (!zombie.lastGoldmineDamage) zombie.lastGoldmineDamage = 0;
+    
+    if (now - zombie.lastGoldmineDamage > DAMAGE_COOLDOWN) {
+        damageEntity(goldmine, 10);
+        zombie.lastGoldmineDamage = now;
+        triggerZombieSwing(zombie);
+        console.log("⛏️ Goldmine hit by zombie! Health:", goldmine.health);
+    }
 }
 
 // ================= UPDATE =================
-function update(time,delta) {
+function update(time, delta) {
+    updateResourcePanel();
 
-  this.treeCount.text = 'Wood: ' + Math.trunc(resourceWood);
-  this.rockCount.text = 'Stone: ' + Math.trunc(resourceStone);
-  this.ironCount.text = 'Iron: ' + Math.trunc(resourceIron);
+    this.angleText.setPosition(player.x - 10, player.y - 10);
+    this.posx.setPosition(player.x - 10, player.y - 60);
+    this.posy.setPosition(player.x - 10, player.y - 30);
+    this.curx.setPosition(player.x - 10, player.y - 90);
+    this.cury.setPosition(player.x - 10, player.y - 120);
 
-  this.angleText.setPosition(player.x - 10, player.y - 10);
-  this.posx.setPosition(player.x - 10, player.y - 60);
-  this.posy.setPosition(player.x - 10, player.y - 30);
-  this.curx.setPosition(player.x - 10, player.y - 90);
-  this.cury.setPosition(player.x - 10, player.y - 120);
+    this.posx.text = 'positionx ' + player.x.toFixed(1);
+    this.posy.text = 'positiony ' + player.y.toFixed(1);
 
-  this.posx.text = 'positionx ' + player.x.toFixed(1);
-  this.posy.text = 'positiony ' + player.y.toFixed(1);
+    handlePlayerMovement();
+    handleHotbarInput();
+    farmSystem();
+    updateSwingAnimation(delta);
 
-  handlePlayerMovement();
-  handleHotbarInput();
-  farmSystem();
+    this.cameras.main.centerOn(player.x, player.y);
 
-  this.cameras.main.centerOn(player.x, player.y);
+    if (updatePlayerChunk()) {
+        mapTesselation();
+    }
 
-  if (updatePlayerChunk()) {
-    mapTesselation();
-  }
+    handleBuildPreview();
+    tryPlaceWorkbench();
+    tryPlaceGoldmine();
+    tryPlaceCrossbowTurret();
+    updateCrossbowTurrets();
+    updateCrossbowBolts();
+    updateWorkbenchClaimOverlay();
+    updateGoldmines();
+    updateDayNight(delta);
+    trySpawnZombie();
+    updateZombies();
+    updateAllHealthBars();
 
-  handleBuildPreview();
-  tryPlaceWorkbench();
-  updateWorkbenchClaimOverlay();
-
-  updateDayNight(delta);
-  trySpawnZombie();
-  updateZombies();
-
-  treeTouchCount = 0;
-  rockTouchCount = 0;
-  ironTouchCount = 0;
-
+    treeTouchCount = 0;
+    rockTouchCount = 0;
+    ironTouchCount = 0;
 }
 
 // ================= HOTBAR FUNCTIONS =================
 function createHotbar() {
-  const slotSize = 56;
-  const spacing = 8;
-  const totalWidth = HOTBAR_SLOTS * slotSize + (HOTBAR_SLOTS - 1) * spacing;
-  const startX = 1920 / 2 - totalWidth / 2;
-  const y = 1080 - 80;
+    const slotSize = 56;
+    const spacing = 8;
+    const totalWidth = HOTBAR_SLOTS * slotSize + (HOTBAR_SLOTS - 1) * spacing;
+    const startX = 1920 / 2 - totalWidth / 2;
+    const y = 1080 - 80;
 
-  for (let i = 0; i < HOTBAR_SLOTS; i++) {
-    let slot = game.scene.scenes[0].add.rectangle(
-      startX + i * (slotSize + spacing) + slotSize / 2,
-      y,
-      slotSize,
-      slotSize,
-      0x000000,
-      0.4
-    )
-      .setStrokeStyle(2, 0xffffff)
-      .setScrollFactor(0)
-      .setInteractive()
-      .setDepth(1000);
+    for (let i = 0; i < HOTBAR_SLOTS; i++) {
+        let slot = game.scene.scenes[0].add.rectangle(
+            startX + i * (slotSize + spacing) + slotSize / 2,
+            y,
+            slotSize,
+            slotSize,
+            0x000000, 0.4
+        )
+        .setStrokeStyle(2, 0xffffff)
+        .setScrollFactor(0)
+        .setInteractive()
+        .setDepth(1000);
 
-    slot.on('pointerdown', () => selectHotbarSlot(i));
-    hotbarSlots.push(slot);
-  }
+        slot.on('pointerdown', () => selectHotbarSlot(i));
+        hotbarSlots.push(slot);
+    }
 
-  let axeIcon = game.scene.scenes[0].add.image(
-    hotbarSlots[0].x,
-    hotbarSlots[0].y,
-    'axe'
-  ).setScale(1.75).setScrollFactor(0).setDepth(1001);
+    let axeIcon = game.scene.scenes[0].add.image(hotbarSlots[0].x, hotbarSlots[0].y, 'axe')
+        .setScale(1.75).setScrollFactor(0).setDepth(1001);
+    hotbarIcons[0] = axeIcon;
 
-  hotbarIcons[0] = axeIcon;
+    let workbenchIcon = game.scene.scenes[0].add.image(hotbarSlots[1].x, hotbarSlots[1].y, 'workbench')
+        .setScale(1).setScrollFactor(0).setDepth(1001);
+    hotbarIcons[1] = workbenchIcon;
 
-  // Slot 2 (Workbench)
-  let workbenchIcon = game.scene.scenes[0].add.image(
-    hotbarSlots[1].x,
-    hotbarSlots[1].y,
-    'workbench'
-  )
-  .setScale(1)
-  .setScrollFactor(0)
-  .setDepth(1001);
+    let goldmineIcon = game.scene.scenes[0].add.image(hotbarSlots[2].x, hotbarSlots[2].y, 'goldmine')
+        .setScale(1).setScrollFactor(0).setDepth(1001);
+    hotbarIcons[2] = goldmineIcon;
 
-  hotbarIcons[1] = workbenchIcon;
+      // Crossbow turret icon in slot 3
+    let crossbowTurretIcon = game.scene.scenes[0].add.image(hotbarSlots[3].x, hotbarSlots[3].y, 'crossbowturret1')
+      .setScale(1).setScrollFactor(0).setDepth(1001);
+    hotbarIcons[3] = crossbowTurretIcon;
 
-
-
-
-  updateHotbarSelection();
+    updateHotbarSelection();
 }
 
-
-
-
 function selectHotbarSlot(index) {
-  selectedHotbarSlot = index;
-  updateHotbarSelection();
+    selectedHotbarSlot = index;
+    updateHotbarSelection();
 }
 
 function updateHotbarSelection() {
-  hotbarSlots.forEach((s, i) => {
-    s.setStrokeStyle(2, i === selectedHotbarSlot ? 0xffff00 : 0xffffff);
-  });
+    hotbarSlots.forEach((s, i) => {
+        s.setStrokeStyle(2, i === selectedHotbarSlot ? 0xffff00 : 0xffffff);
+    });
 
-  // Change player sprite based on selected slot
-  if (selectedHotbarSlot === 0) {
-    player.setTexture('player');
-  }
-  else if (selectedHotbarSlot === 1) {
-    player.setTexture('playerworkbench');
-  }
-
+    if (selectedHotbarSlot === 0) {
+        player.setTexture('player');
+    } else if (selectedHotbarSlot === 1 || selectedHotbarSlot === 2 || selectedHotbarSlot === 3) {
+        player.setTexture('playerworkbench');
+    }
 }
 
 function handleHotbarInput() {
-  if (keys.one.isDown) selectHotbarSlot(0);
-  if (keys.two.isDown) selectHotbarSlot(1);
-  if (keys.three.isDown) selectHotbarSlot(2);
-  if (keys.four.isDown) selectHotbarSlot(3);
-  if (keys.five.isDown) selectHotbarSlot(4);
-  if (keys.six.isDown) selectHotbarSlot(5);
-  if (keys.seven.isDown) selectHotbarSlot(6);
-  if (keys.eight.isDown) selectHotbarSlot(7);
-  if (keys.nine.isDown) selectHotbarSlot(8);
+    if (keys.one.isDown) selectHotbarSlot(0);
+    if (keys.two.isDown) selectHotbarSlot(1);
+    if (keys.three.isDown) selectHotbarSlot(2);
+    if (keys.four.isDown) selectHotbarSlot(3);
+    if (keys.five.isDown) selectHotbarSlot(4);
+    if (keys.six.isDown) selectHotbarSlot(5);
+    if (keys.seven.isDown) selectHotbarSlot(6);
+    if (keys.eight.isDown) selectHotbarSlot(7);
+    if (keys.nine.isDown) selectHotbarSlot(8);
 }
 
 // ================= FARMING =================
 function farmSystem() {
-  if (!pointer.isDown) return;
-  if(selectedHotbarSlot != 0) return;
+    if (!pointer.isDown) return;
+    if (selectedHotbarSlot != 0) return;
 
-  if (treeTouchCount > 0) resourceWood += FARM_RATE * treeTouchCount;
-  if (rockTouchCount > 0) resourceStone += FARM_RATE * rockTouchCount;
-  if (ironTouchCount > 0) resourceIron += FARM_RATE * ironTouchCount;
+    if (treeTouchCount > 0) resourceWood += FARM_RATE * treeTouchCount;
+    if (rockTouchCount > 0) resourceStone += FARM_RATE * rockTouchCount;
+    if (ironTouchCount > 0) resourceIron += FARM_RATE * ironTouchCount;
 }
 
 // ================= MOVEMENT =================
 function handlePlayerMovement() {
+    if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
+        player.setVelocityX(-200);
+        if (cursors.shift.isDown) player.setVelocityX(-300);
+    } else if ((cursors.right.isDown && player.x <= xLimit) || (keys.right.isDown && player.x <= xLimit)) {
+        player.setVelocityX(200);
+        if (cursors.shift.isDown) player.setVelocityX(300);
+    } else {
+        player.setVelocityX(0);
+    }
 
-  if ((cursors.left.isDown && player.x >= 0) || (keys.left.isDown && player.x >= 0)) {
-    player.setVelocityX(-200);
-    if (cursors.shift.isDown) player.setVelocityX(-300);
-  }
-  else if ((cursors.right.isDown && player.x <= xLimit) || (keys.right.isDown && player.x <= xLimit)) {
-    player.setVelocityX(200);
-    if (cursors.shift.isDown) player.setVelocityX(300);
-  }
-  else {
-    player.setVelocityX(0);
-  }
-
-  if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
-    player.setVelocityY(-200);
-    if (cursors.shift.isDown) player.setVelocityY(-300);
-  }
-  else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
-    player.setVelocityY(200);
-    if (cursors.shift.isDown) player.setVelocityY(300);
-  }
-  else {
-    player.setVelocityY(0);
-  }
+    if ((cursors.up.isDown && player.y >= 0) || (keys.up.isDown && player.y >= 0)) {
+        player.setVelocityY(-200);
+        if (cursors.shift.isDown) player.setVelocityY(-300);
+    } else if ((cursors.down.isDown && player.y <= yLimit) || (keys.down.isDown && player.y <= yLimit)) {
+        player.setVelocityY(200);
+        if (cursors.shift.isDown) player.setVelocityY(300);
+    } else {
+        player.setVelocityY(0);
+    }
 }
 
 function updatePlayerChunk() {
-  let cx = closestChunkBoundary(player.x);
-  let cy = closestChunkBoundary(player.y);
-  let changed = cx !== playerXChunk || cy !== playerYChunk;
-  playerXChunk = cx;
-  playerYChunk = cy;
-  return changed;
+    let cx = closestChunkBoundary(player.x);
+    let cy = closestChunkBoundary(player.y);
+    let changed = cx !== playerXChunk || cy !== playerYChunk;
+    playerXChunk = cx;
+    playerYChunk = cy;
+    return changed;
 }
 
 function mapTesselation() {
-  let iIndex = 0;
-  for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
-    let jIndex = 0;
-    for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
-      background[iIndex][jIndex].setPosition(playerXChunk + i, playerYChunk + j);
-      jIndex++;
+    let iIndex = 0;
+    for (var i = backgroundDifferenceBehind(background_chunk_width); i <= backgroundDifferenceInFront(background_chunk_width); i += background_size) {
+        let jIndex = 0;
+        for (var j = backgroundDifferenceBehind(background_chunk_height); j <= backgroundDifferenceInFront(background_chunk_height); j += background_size) {
+            background[iIndex][jIndex].setPosition(playerXChunk + i, playerYChunk + j);
+            jIndex++;
+        }
+        iIndex++;
     }
-    iIndex++;
-  }
 }
 
 function updateDayNight(delta) {
+    timeOfDay += delta / 1000 / DAY_LENGTH;
+    timeOfDay %= 1;
 
-  // Advance time
-  timeOfDay += delta / 1000 / DAY_LENGTH;
-  timeOfDay %= 1;
+    const darkness = Math.max(0, Math.cos((timeOfDay - 0.5) * Math.PI * 2));
+    const alpha = Phaser.Math.Clamp(darkness * 0.6, 0, 0.6);
 
-  // Calculate darkness using cosine curve (smooth)
-  // Noon = 0 darkness, Midnight = max darkness
-  const darkness = Math.max(
-    0,
-    Math.cos((timeOfDay - 0.5) * Math.PI * 2)
-  );
-
-  // Tune night strength here
-  const alpha = Phaser.Math.Clamp(darkness * 0.6, 0, 0.6);
-
-  dayNightOverlay.clear();
-  dayNightOverlay.fillStyle(0x000000, alpha);
-  dayNightOverlay.fillRect(0, 0, 1920, 1080);
+    dayNightOverlay.clear();
+    dayNightOverlay.fillStyle(0x000000, alpha);
+    dayNightOverlay.fillRect(0, 0, 1920, 1080);
 }
 
 function trySpawnZombie() {
+    if (!isNight()) {
+        zombieSpawnedThisNight = false;
+        return;
+    }
 
-  // Reset flag when day
-  if (!isNight()) {
-    zombieSpawnedThisNight = false;
-    return;
-  }
+    if (workbenches.countActive(true) === 0) return;
+    if (zombieSpawnedThisNight) return;
 
-  // Must have a workbench
-  if (workbenches.countActive(true) === 0) return;
+    const bench = workbenches.getChildren()[0];
+    if (!bench) return;
 
-  // Only once per night
-  if (zombieSpawnedThisNight) return;
+    const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
 
-  const bench = workbenches.getChildren()[0];
-  if (!bench) return;
+    let x = bench.x + Math.cos(angle) * distance;
+    let y = bench.y + Math.sin(angle) * distance;
 
-  const distance = ZOMBIE_SPAWN_DISTANCE_TILES * BUILD_TILE_SIZE;
-  const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const zombie = zombies.create(x, y, 'zombie');
 
-  let x = bench.x + Math.cos(angle) * distance;
-  let y = bench.y + Math.sin(angle) * distance;
+    const radius = 10;
+    const offsetX = zombie.body.width / 2 - radius;
+    const offsetY = zombie.body.height / 2 - radius;
+    zombie.body.setCircle(radius, offsetX - 2, offsetY - 2);
 
+    zombie.setScale(2.5);
+    zombie.setCollideWorldBounds(true);
+    zombie.speed = 60;
 
-  const zombie = zombies.create(x, y, 'zombie');
-  
+    // Initialize swing animation properties
+    zombie.isSwinging = false;
+    zombie.swingStartTime = 0;
+    
+    // ✅ NEW: Initialize per-zombie damage cooldowns
+    zombie.lastPlayerDamage = 0;
+    zombie.lastWorkbenchDamage = 0;
+    zombie.lastGoldmineDamage = 0;
+    // Knockback tracking
+  zombie.knockbackTime = 0;
+  zombie.knockbackVelX = 0;
+  zombie.knockbackVelY = 0;
 
-  // ✅ SAME HITBOX AS PLAYER
-  const radius = 10;
-  const offsetX = zombie.body.width / 2 - radius;
-  const offsetY = zombie.body.height / 2 - radius;
+    createHealthBar(game.scene.scenes[0], zombie, ZOMBIE_MAX_HEALTH, ZOMBIE_HEALTH_BAR_OFFSET_Y);
 
-  zombie.body.setCircle(radius, offsetX-2, offsetY-2);
+    zombieSpawnedThisNight = true;
+    console.log("🧟 Zombie spawned at night!");
+}
 
-  zombie.setScale(2.5);
-  zombie.setCollideWorldBounds(true);
-  zombie.speed = 60;
-
-  zombieSpawnedThisNight = true;
-
-  console.log("🧟 Zombie spawned at night!");
+function triggerZombieSwing(zombie) {
+    if (!zombie || !zombie.active) return;
+    zombie.isSwinging = true;
+    zombie.swingStartTime = Date.now();
 }
 
 function updateZombies() {
+    if (workbenches.countActive(true) === 0) return;
 
-  if (workbenches.countActive(true) === 0) return;
+    const bench = workbenches.getChildren()[0];
+    const now = Date.now();
 
-  const bench = workbenches.getChildren()[0];
+    zombies.getChildren().forEach(zombie => {
+        if (!zombie.active) return;
 
-  zombies.getChildren().forEach(zombie => {
+        const baseAngle = Phaser.Math.Angle.Between(zombie.x, zombie.y, bench.x, bench.y);
 
-    const angle = Phaser.Math.Angle.Between(
-      zombie.x,
-      zombie.y,
-      bench.x,
-      bench.y
-    );
+        // Handle swing animation
+        if (zombie.isSwinging) {
+            const elapsed = now - zombie.swingStartTime;
+            if (elapsed < ZOMBIE_SWING_DURATION) {
+                const progress = elapsed / ZOMBIE_SWING_DURATION;
+                const swingOffset = Math.sin(progress * Math.PI * 2) * ZOMBIE_SWING_AMPLITUDE * Phaser.Math.DEG_TO_RAD;
+                zombie.setRotation(baseAngle + swingOffset);
+            } else {
+                zombie.isSwinging = false;
+                zombie.setRotation(baseAngle);
+            }
+        } else {
+            zombie.setRotation(baseAngle);
+        }
 
-    zombie.setRotation(angle);
-
-    zombie.setVelocity(
-      Math.cos(angle) * zombie.speed,
-      Math.sin(angle) * zombie.speed
-    );
-  });
+        // Check if zombie is being knocked back
+        const knockbackElapsed = now - (zombie.knockbackTime || 0);
+        
+        if (knockbackElapsed < CROSSBOW_BOLT_KNOCKBACK_DURATION) {
+            // Still in knockback - apply decaying knockback velocity
+            const knockbackProgress = knockbackElapsed / CROSSBOW_BOLT_KNOCKBACK_DURATION;
+            const knockbackMultiplier = 1 - knockbackProgress; // Decays from 1 to 0
+            
+            zombie.setVelocity(
+                zombie.knockbackVelX * knockbackMultiplier,
+                zombie.knockbackVelY * knockbackMultiplier
+            );
+        } else {
+            // Normal movement toward workbench
+            zombie.setVelocity(
+                Math.cos(baseAngle) * zombie.speed,
+                Math.sin(baseAngle) * zombie.speed
+            );
+        }
+    });
 }
-
 </script>
-
 </body>
 </html>
