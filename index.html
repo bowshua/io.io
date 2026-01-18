@@ -128,6 +128,11 @@ const SWING_SPEED = 10;
 const SWING_AMPLITUDE = 35;
 var basePlayerAngle = 0;
 
+// ================= DRILL ANIMATION ================= // NEW
+const DRILL_VIBRATION_SPEED = 50;      // How fast the vibration oscillates
+const DRILL_VIBRATION_AMPLITUDE = 5;   // Small angle wobble (degrees)
+
+
 // ================= ZOMBIE SWING ANIMATION =================
 const ZOMBIE_SWING_SPEED = 25;
 const ZOMBIE_SWING_AMPLITUDE = 30;
@@ -155,6 +160,26 @@ const CROSSBOW_TURRET_FIRE_RATE = 500; // ms between shots
 const CROSSBOW_BOLT_KNOCKBACK = 150; // knockback force applied to zombie
 const CROSSBOW_BOLT_KNOCKBACK_DURATION = 200; // ms of knockback effect
 
+// ================= UPGRADE SYSTEM =================
+var itemUpgrades = {};          // Track upgrade levels per slot
+var upgradePanel = {};          // UI elements for upgrade panel
+var hotbarLevelIndicators = []; // Level indicator text on slots
+
+// Upgrade configurations per slot
+const UPGRADE_CONFIG = {
+    0: { // Axe slot (slot index 0)
+        maxLevel: 3,
+        playerTextures: ['player', 'player1', 'player2', 'playerdrill'],
+        iconTextures: ['axe', 'axe1', 'axe2', 'drill'], // NEW: hotbar icons per level
+        names: ['Axe', 'Iron Axe', 'Steel Axe', 'Drill'],
+        costs: [1, 1, 1],
+        farmRateMultiplier: [1, 1.5, 2, 3]
+    }
+};
+
+
+
+
 // ================= PRELOAD =================
 function preload() {
     this.load.image('floor', 'assets/therealtile.png');
@@ -172,7 +197,17 @@ function preload() {
     this.load.image('crossbowturret2', 'assets/crossbowturret2.png');
     this.load.image('crossbowturret3', 'assets/crossbowturret3.png');
     this.load.image('crossbowbolt', 'assets/crossbowbolt.png');
+    this.load.image('player1', 'assets/playerwithaxe1.png');
+    this.load.image('player2', 'assets/playerwithaxe2.png');
+    this.load.image('playerdrill', 'assets/playerwithdrill.png');
+    this.load.image('axe', 'assets/axe.png');
+    this.load.image('axe1', 'assets/axe1.png');    // NEW
+    this.load.image('axe2', 'assets/axe2.png');    // NEW
+    this.load.image('drill', 'assets/drill.png'); // NEW
+    // ... rest of existing loads ...
+
 }
+
 
 // ================= HELPERS =================
 function closestChunkBoundary(position) {
@@ -211,6 +246,266 @@ function calculateLeadAngle(shooterX, shooterY, targetX, targetY, targetVelX, ta
     
     // Calculate angle to predicted position
     return Phaser.Math.Angle.Between(shooterX, shooterY, predictedX, predictedY);
+}
+
+// ================= UPGRADE PANEL FUNCTIONS =================
+function createUpgradePanel(scene) {
+    upgradePanel.container = scene.add.container(0, 0);
+    upgradePanel.container.setScrollFactor(0);
+    upgradePanel.container.setDepth(1002);
+    upgradePanel.container.setVisible(false);
+    
+    // Panel background
+    upgradePanel.bg = scene.add.graphics();
+    upgradePanel.bg.setScrollFactor(0);
+    upgradePanel.container.add(upgradePanel.bg);
+    
+    // Item name text
+    upgradePanel.nameText = scene.add.text(0, 0, '', {
+        font: 'bold 14px Arial',
+        fill: '#ffffff'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    upgradePanel.container.add(upgradePanel.nameText);
+    
+    // Level text
+    upgradePanel.levelText = scene.add.text(0, 0, '', {
+        font: '12px Arial',
+        fill: '#aaaaaa'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    upgradePanel.container.add(upgradePanel.levelText);
+    
+    // Upgrade button background
+    upgradePanel.buttonBg = scene.add.graphics();
+    upgradePanel.buttonBg.setScrollFactor(0);
+    upgradePanel.container.add(upgradePanel.buttonBg);
+    
+    // Upgrade button text
+    upgradePanel.buttonText = scene.add.text(0, 0, '', {
+        font: 'bold 12px Arial',
+        fill: '#ffffff'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0);
+    upgradePanel.container.add(upgradePanel.buttonText);
+    
+    // Upgrade button hit area
+    upgradePanel.buttonHitArea = scene.add.rectangle(0, 0, 80, 28, 0xffffff, 0)
+        .setScrollFactor(0)
+        .setInteractive({ useHandCursor: true });
+    upgradePanel.container.add(upgradePanel.buttonHitArea);
+    
+    // Button interactions
+    upgradePanel.buttonHitArea.on('pointerover', () => {
+        if (upgradePanel.canAfford) {
+            drawUpgradeButton(true);
+        }
+    });
+    
+    upgradePanel.buttonHitArea.on('pointerout', () => {
+        drawUpgradeButton(false);
+    });
+    
+    upgradePanel.buttonHitArea.on('pointerdown', () => {
+        tryUpgradeItem();
+    });
+}
+
+function drawUpgradeButton(isHovered) {
+    upgradePanel.buttonBg.clear();
+    
+    const btnX = upgradePanel.buttonX;
+    const btnY = upgradePanel.buttonY;
+    const btnWidth = 80;
+    const btnHeight = 28;
+    
+    if (upgradePanel.isMaxLevel) {
+        // Max level - gray button
+        upgradePanel.buttonBg.fillStyle(0x444444, 0.9);
+        upgradePanel.buttonBg.fillRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonBg.lineStyle(2, 0x666666, 1);
+        upgradePanel.buttonBg.strokeRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonText.setText('MAX');
+        upgradePanel.buttonText.setFill('#888888');
+    } else if (!upgradePanel.canAfford) {
+        // Can't afford - red tinted
+        upgradePanel.buttonBg.fillStyle(0x4a2020, 0.9);
+        upgradePanel.buttonBg.fillRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonBg.lineStyle(2, 0x6a3030, 1);
+        upgradePanel.buttonBg.strokeRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonText.setFill('#aa6666');
+    } else if (isHovered) {
+        // Hovered and affordable - bright gold
+        upgradePanel.buttonBg.fillStyle(0xc9a227, 0.95);
+        upgradePanel.buttonBg.fillRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonBg.lineStyle(3, 0xffd700, 0.8);
+        upgradePanel.buttonBg.strokeRoundedRect(btnX - btnWidth/2 - 1, btnY - btnHeight/2 - 1, btnWidth + 2, btnHeight + 2, 7);
+        upgradePanel.buttonBg.lineStyle(2, 0xe6be2e, 1);
+        upgradePanel.buttonBg.strokeRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonText.setFill('#ffffff');
+    } else {
+        // Normal affordable state - gold
+        upgradePanel.buttonBg.fillStyle(0xa08020, 0.9);
+        upgradePanel.buttonBg.fillRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonBg.lineStyle(2, 0xc9a227, 1);
+        upgradePanel.buttonBg.strokeRoundedRect(btnX - btnWidth/2, btnY - btnHeight/2, btnWidth, btnHeight, 6);
+        upgradePanel.buttonText.setFill('#ffd700');
+    }
+}
+
+function updateUpgradePanel() {
+    const slotIndex = selectedHotbarSlot;
+    const config = UPGRADE_CONFIG[slotIndex];
+    
+    // Hide if slot is not upgradeable
+    if (!config) {
+        upgradePanel.container.setVisible(false);
+        return;
+    }
+    
+    const currentLevel = itemUpgrades[slotIndex] || 0;
+    const isMaxLevel = currentLevel >= config.maxLevel;
+    const upgradeCost = isMaxLevel ? 0 : config.costs[currentLevel];
+    const canAfford = resourceGold >= upgradeCost;
+    
+    // Store state for button drawing
+    upgradePanel.isMaxLevel = isMaxLevel;
+    upgradePanel.canAfford = canAfford;
+    upgradePanel.currentSlot = slotIndex;
+    
+    // Position panel above selected hotbar slot
+    const slot = hotbarSlots[slotIndex];
+    const panelX = slot.x;
+    const panelY = slot.y - 75;
+    
+    const panelWidth = 120;
+    const panelHeight = 70;
+    
+    // Draw panel background
+    upgradePanel.bg.clear();
+    upgradePanel.bg.fillStyle(0x1a1a2e, 0.95);
+    upgradePanel.bg.fillRoundedRect(panelX - panelWidth/2, panelY - panelHeight/2, panelWidth, panelHeight, 8);
+    upgradePanel.bg.lineStyle(2, 0x4a4a6a, 1);
+    upgradePanel.bg.strokeRoundedRect(panelX - panelWidth/2, panelY - panelHeight/2, panelWidth, panelHeight, 8);
+    
+    // Arrow pointing down to slot
+    upgradePanel.bg.fillStyle(0x1a1a2e, 0.95);
+    upgradePanel.bg.fillTriangle(
+        panelX - 8, panelY + panelHeight/2,
+        panelX + 8, panelY + panelHeight/2,
+        panelX, panelY + panelHeight/2 + 10
+    );
+    upgradePanel.bg.lineStyle(2, 0x4a4a6a, 1);
+    upgradePanel.bg.lineBetween(panelX - 8, panelY + panelHeight/2, panelX, panelY + panelHeight/2 + 10);
+    upgradePanel.bg.lineBetween(panelX + 8, panelY + panelHeight/2, panelX, panelY + panelHeight/2 + 10);
+    
+    // Item name
+    upgradePanel.nameText.setPosition(panelX, panelY - 20);
+    upgradePanel.nameText.setText(config.names[currentLevel]);
+    
+    // Level display with stars
+    const stars = '★'.repeat(currentLevel) + '☆'.repeat(config.maxLevel - currentLevel);
+    upgradePanel.levelText.setPosition(panelX, panelY - 4);
+    upgradePanel.levelText.setText(stars);
+    upgradePanel.levelText.setFill(currentLevel > 0 ? '#ffd700' : '#666666');
+    
+    // Button position
+    upgradePanel.buttonX = panelX;
+    upgradePanel.buttonY = panelY + 18;
+    upgradePanel.buttonHitArea.setPosition(upgradePanel.buttonX, upgradePanel.buttonY);
+    upgradePanel.buttonText.setPosition(upgradePanel.buttonX, upgradePanel.buttonY);
+    
+    // Button text
+    if (isMaxLevel) {
+        upgradePanel.buttonText.setText('MAX');
+    } else {
+        upgradePanel.buttonText.setText('⬆ ' + upgradeCost + ' 🪙');
+    }
+    
+    drawUpgradeButton(false);
+    
+    upgradePanel.container.setVisible(true);
+}
+
+function tryUpgradeItem() {
+    const slotIndex = upgradePanel.currentSlot;
+    const config = UPGRADE_CONFIG[slotIndex];
+    
+    if (!config) return;
+    
+    const currentLevel = itemUpgrades[slotIndex] || 0;
+    
+    if (currentLevel >= config.maxLevel) {
+        console.log("⚠️ Already at max level!");
+        return;
+    }
+    
+    const upgradeCost = config.costs[currentLevel];
+    
+    if (resourceGold < upgradeCost) {
+        console.log("⚠️ Not enough gold! Need:", upgradeCost);
+        return;
+    }
+    
+    resourceGold -= upgradeCost;
+    itemUpgrades[slotIndex] = currentLevel + 1;
+    
+    console.log("⬆️ Upgraded slot", slotIndex, "to level", itemUpgrades[slotIndex]);
+    
+    // Update visuals
+    updateHotbarLevelIndicators();
+    updateHotbarIcons();      // NEW: Update the hotbar icon
+    updateUpgradePanel();
+    updateHotbarSelection();
+}
+
+function updateHotbarIcons() {
+    // Update axe/drill icon based on upgrade level
+    const config = UPGRADE_CONFIG[0];
+    if (config && hotbarIcons[0]) {
+        const level = itemUpgrades[0] || 0;
+        const iconTexture = config.iconTextures[level];
+        hotbarIcons[0].setTexture(iconTexture);
+    }
+}
+
+function createHotbarLevelIndicators(scene) {
+    hotbarSlots.forEach((slot, index) => {
+        // Create level indicator badge
+        const indicator = scene.add.text(
+            slot.x + 22,
+            slot.y - 22,
+            '',
+            {
+                font: 'bold 10px Arial',
+                fill: '#ffd700',
+                backgroundColor: '#1a1a2e',
+                padding: { x: 3, y: 1 }
+            }
+        ).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1002);
+        
+        hotbarLevelIndicators[index] = indicator;
+    });
+    
+    updateHotbarLevelIndicators();
+}
+
+function updateHotbarLevelIndicators() {
+    hotbarSlots.forEach((slot, index) => {
+        const indicator = hotbarLevelIndicators[index];
+        const config = UPGRADE_CONFIG[index];
+        
+        if (!config || !indicator) {
+            if (indicator) indicator.setVisible(false);
+            return;
+        }
+        
+        const level = itemUpgrades[index] || 0;
+        
+        if (level > 0) {
+            indicator.setText('Lv.' + level);
+            indicator.setVisible(true);
+        } else {
+            indicator.setVisible(false);
+        }
+    });
 }
 
 
@@ -1057,15 +1352,24 @@ function createFullscreenButton(scene) {
 // ================= SWING ANIMATION FUNCTION =================
 function updateSwingAnimation(delta) {
     const cursor = getCursorWorldPosition();
-
     basePlayerAngle = Phaser.Math.RAD_TO_DEG * Phaser.Math.Angle.Between(player.x, player.y, cursor.x, cursor.y);
 
-    const shouldSwing = selectedHotbarSlot === 0 && pointer.isDown;
+    const shouldAnimate = selectedHotbarSlot === 0 && pointer.isDown;
+    const level = itemUpgrades[0] || 0;
+    const isDrill = level >= 3; // Level 3 is the drill
 
-    if (shouldSwing) {
-        swingAnimationTime += delta / 1000 * SWING_SPEED * Math.PI * 2;
-        const swingOffset = Math.sin(swingAnimationTime) * SWING_AMPLITUDE;
-        player.setAngle(basePlayerAngle + swingOffset);
+    if (shouldAnimate) {
+        if (isDrill) {
+            // Drill animation: fast vibration effect
+            swingAnimationTime += delta / 1000 * DRILL_VIBRATION_SPEED * Math.PI * 2;
+            const vibrationOffset = Math.sin(swingAnimationTime) * DRILL_VIBRATION_AMPLITUDE;
+            player.setAngle(basePlayerAngle + vibrationOffset);
+        } else {
+            // Regular axe swing animation
+            swingAnimationTime += delta / 1000 * SWING_SPEED * Math.PI * 2;
+            const swingOffset = Math.sin(swingAnimationTime) * SWING_AMPLITUDE;
+            player.setAngle(basePlayerAngle + swingOffset);
+        }
     } else {
         swingAnimationTime = 0;
         player.setAngle(basePlayerAngle);
@@ -1152,6 +1456,11 @@ function create() {
     this.physics.add.collider(player, tree, () => treeTouchCount++);
     this.physics.add.collider(player, rock, () => rockTouchCount++);
     this.physics.add.collider(player, iron, () => ironTouchCount++);
+
+    // Initialize item upgrades
+    itemUpgrades = {
+      0: 0  // Axe starts at level 0
+    };
 
     // Workbench group
     workbenches = this.physics.add.staticGroup();
@@ -1284,7 +1593,7 @@ function onZombieHitGoldmine(goldmine, zombie) {
 // ================= UPDATE =================
 function update(time, delta) {
     updateResourcePanel();
-
+    updateUpgradePanel();
     this.angleText.setPosition(player.x - 10, player.y - 10);
     this.posx.setPosition(player.x - 10, player.y - 60);
     this.posy.setPosition(player.x - 10, player.y - 30);
@@ -1365,6 +1674,11 @@ function createHotbar() {
       .setScale(1).setScrollFactor(0).setDepth(1001);
     hotbarIcons[3] = crossbowTurretIcon;
 
+    // After all existing hotbar creation code, add:
+    createHotbarLevelIndicators(game.scene.scenes[0]);
+    createUpgradePanel(game.scene.scenes[0]);
+    
+
     updateHotbarSelection();
 }
 
@@ -1378,11 +1692,19 @@ function updateHotbarSelection() {
         s.setStrokeStyle(2, i === selectedHotbarSlot ? 0xffff00 : 0xffffff);
     });
 
+    // Update player texture based on slot and upgrade level
     if (selectedHotbarSlot === 0) {
-        player.setTexture('player');
+        // Axe slot - check upgrade level
+        const config = UPGRADE_CONFIG[0];
+        const level = itemUpgrades[0] || 0;
+        const texture = config.playerTextures[level];
+        player.setTexture(texture);
     } else if (selectedHotbarSlot === 1 || selectedHotbarSlot === 2 || selectedHotbarSlot === 3) {
         player.setTexture('playerworkbench');
     }
+    
+    // Update upgrade panel when selection changes
+    updateUpgradePanel();
 }
 
 function handleHotbarInput() {
@@ -1402,9 +1724,15 @@ function farmSystem() {
     if (!pointer.isDown) return;
     if (selectedHotbarSlot != 0) return;
 
-    if (treeTouchCount > 0) resourceWood += FARM_RATE * treeTouchCount;
-    if (rockTouchCount > 0) resourceStone += FARM_RATE * rockTouchCount;
-    if (ironTouchCount > 0) resourceIron += FARM_RATE * ironTouchCount;
+    // Get farm rate multiplier from upgrade level
+    const config = UPGRADE_CONFIG[0];
+    const level = itemUpgrades[0] || 0;
+    const multiplier = config ? config.farmRateMultiplier[level] : 1;
+    const adjustedFarmRate = FARM_RATE * multiplier;
+
+    if (treeTouchCount > 0) resourceWood += adjustedFarmRate * treeTouchCount;
+    if (rockTouchCount > 0) resourceStone += adjustedFarmRate * rockTouchCount;
+    if (ironTouchCount > 0) resourceIron += adjustedFarmRate * ironTouchCount;
 }
 
 // ================= MOVEMENT =================
